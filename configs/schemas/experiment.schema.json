@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExperimentConfig",
+  "type": "object",
+  "required": ["experiment", "data", "features", "model", "validation", "outputs"],
+  "properties": {
+    "experiment": {
+      "type": "object",
+      "required": ["experiment_id", "competition", "hypothesis", "seed", "run_mode"],
+      "properties": {
+        "experiment_id": { "type": "string" },
+        "competition": { "type": "string" },
+        "hypothesis": { "type": "string" },
+        "base_experiment": { "type": ["string", "null"] },
+        "seed": { "type": "integer" },
+        "run_mode": { "type": "string", "enum": ["static_review", "smoke", "single_fold", "full_cv", "hpo"] },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "data": { "type": "object" },
+    "features": { "type": "object" },
+    "model": {
+      "type": "object",
+      "required": ["family"],
+      "properties": {
+        "family": { "type": "string" },
+        "preset": { "type": "string" },
+        "params": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "validation": { "type": "object" },
+    "outputs": { "type": "object" }
+  },
+  "additionalProperties": true
+}
+

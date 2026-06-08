@@ -1,0 +1,91 @@
+# Feature family registry.
+# Human-edited YAML. Validate with configs/schemas/feature_catalog.schema.json.
+
+feature_families:
+  - name: basic_numeric
+    enabled: true
+    requires_target: false
+    requires_external_data: false
+    fold_safety: global_safe
+    leakage_risk: low
+    transductive_risk: low
+    intended_models: [linear, xgboost, lightgbm, catboost, neural_net]
+
+  - name: categorical_cross_features
+    enabled: true
+    requires_target: false
+    requires_external_data: false
+    fold_safety: global_safe
+    leakage_risk: low
+    transductive_risk: low
+    max_order: 3
+    max_cardinality: 50000
+    intended_models: [xgboost, lightgbm, catboost, neural_net]
+
+  - name: nested_target_encoding
+    enabled: false
+    requires_target: true
+    requires_external_data: false
+    fold_safety: fold_safe
+    leakage_risk: high
+    transductive_risk: low
+    inner_folds: 5
+    statistics: [mean, std, min, max, median, q05, q10, q45, q55, q90, q95]
+    intended_models: [xgboost, lightgbm, neural_net]
+
+  - name: snap_features
+    enabled: false
+    requires_target: false
+    requires_external_data: true
+    fold_safety: global_safe
+    leakage_risk: medium
+    transductive_risk: low
+    source: original_or_reference_data
+    outputs:
+      - snap_value
+      - snap_diff
+      - snap_distance
+    intended_models: [xgboost, lightgbm, catboost, neural_net]
+
+  - name: digit_decimal_features
+    enabled: false
+    requires_target: false
+    requires_external_data: false
+    fold_safety: global_safe
+    leakage_risk: low
+    transductive_risk: low
+    max_decimal_places: 4
+    include_mod_features: true
+    intended_models: [xgboost, lightgbm, catboost, neural_net]
+
+  - name: frequency_count_encoding
+    enabled: true
+    requires_target: false
+    requires_external_data: false
+    fold_safety: global_safe
+    leakage_risk: low
+    transductive_risk: medium
+    use_train_test_counts: true
+    intended_models: [linear, xgboost, lightgbm, catboost, neural_net]
+
+  - name: original_data_lookup
+    enabled: false
+    requires_target: false
+    requires_external_data: true
+    fold_safety: global_safe
+    leakage_risk: high
+    transductive_risk: low
+    method: ckdtree
+    leakage_review_required: true
+    intended_models: [xgboost, lightgbm, catboost, neural_net]
+
+  - name: projection_manifold_features
+    enabled: false
+    requires_target: false
+    requires_external_data: true
+    fold_safety: global_safe
+    leakage_risk: medium
+    transductive_risk: medium
+    methods: [pca, gaussian_random_projection, kmeans_distance, dae_reconstruction]
+    intended_models: [xgboost, lightgbm, neural_net]
+

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentsConfig",
+  "type": "object",
+  "required": ["agents"],
+  "properties": {
+    "agents": {
+      "type": "object",
+      "required": ["enabled", "roles"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "default_output_format": { "type": "string" },
+        "providers": { "type": "object" },
+        "roles": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

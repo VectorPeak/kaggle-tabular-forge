@@ -1,0 +1,42 @@
+experiment:
+  experiment_id: p02-lgbm-basic-example
+  competition: playground-series-s6e3
+  hypothesis: LightGBM smoke baseline should improve over logistic regression on basic inferred features.
+  seed: 42
+  run_mode: smoke
+  tags:
+    - p02
+    - lightgbm
+    - basic
+
+data:
+  data_dir: data/playground-series-s6e3/raw
+  artifact_root: artifacts
+  target: Churn
+  id_column: id
+
+validation:
+  strategy: stratified_kfold
+  n_splits: 3
+  shuffle: true
+  seed: 42
+
+features:
+  feature_set: basic_inferred
+  families:
+    - basic
+
+model:
+  family: lightgbm
+  preset: smoke
+  params:
+    n_estimators: 100
+    learning_rate: 0.05
+    num_leaves: 31
+    max_depth: -1
+    n_jobs: -1
+
+outputs:
+  experiment_dir: artifacts/experiments/playground-series-s6e3/p02-lgbm-basic-example
+  oof_dir: artifacts/oof/playground-series-s6e3/p02-lgbm-basic-example
+  submission_dir: artifacts/submissions/playground-series-s6e3/p02-lgbm-basic-example

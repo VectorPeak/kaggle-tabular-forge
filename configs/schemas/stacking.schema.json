@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StackingConfig",
+  "type": "object",
+  "required": ["ensemble"],
+  "properties": {
+    "ensemble": {
+      "type": "object",
+      "required": ["candidate_pool", "methods", "safety"],
+      "properties": {
+        "candidate_pool": { "type": "object" },
+        "prediction_artifacts": { "type": "object" },
+        "methods": { "type": "object" },
+        "levels": { "type": "object" },
+        "safety": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

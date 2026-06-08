@@ -1,0 +1,63 @@
+# Goal-level configuration.
+# Human entry should be short; parser expands it into this structured form.
+# Validate with configs/schemas/goal.schema.json.
+
+goal:
+  schema_version: goal.v0
+  goal_id: 20260606-p00-project-foundation
+  created_at: "2026-06-06"
+  status: completed
+  objective: build_evidence_pipeline
+  competition: _project
+  request: Build P0 project foundation contracts, docs, and README.
+
+budget:
+  run_mode: static_review
+  wall_time: null
+  gpu: null
+  submissions: 0
+
+context:
+  metric: null
+  target: null
+  baseline_experiment: null
+  risk_tolerance: low
+
+discovery:
+  metric:
+    value: null
+    source: missing
+    confidence: missing
+  target:
+    value: null
+    source: missing
+    confidence: missing
+  data_paths:
+    train: null
+    test: null
+    sample_submission: null
+  provenance:
+    configs:
+      - configs/goal.example.yaml
+    artifacts: []
+
+acceptance:
+  required_docs:
+    - README.md
+    - AGENTS.md
+    - docs/goal_contract.md
+    - docs/p00_project_foundation.md
+    - docs/artifact_contract.md
+    - docs/leakage_rules.md
+  required_gates:
+    links_resolve: true
+    markdown_fences_balanced: true
+    no_encoding_garbage: true
+    no_failed_patch_artifacts: true
+    no_generated_data_committed: true
+  decision:
+    status: completed
+    reason: P0 evidence-pipeline contracts and README are recorded.
+
+errors: []
+warnings: []

@@ -1,0 +1,82 @@
+# Model registry.
+# Keep heavyweight model families disabled by default.
+
+models:
+  logistic:
+    enabled: true
+    dependency_group: core
+    role: baseline
+    supports_gpu: false
+
+  xgboost:
+    enabled: true
+    dependency_group: gbdt
+    role: strong_baseline
+    supports_gpu: true
+    default_params:
+      objective: binary:logistic
+      eval_metric: auc
+      max_depth: 6
+      learning_rate: 0.03
+      n_estimators: 2000
+
+  lightgbm:
+    enabled: true
+    dependency_group: gbdt
+    role: strong_baseline
+    supports_gpu: true
+    default_params:
+      objective: binary
+      metric: auc
+      num_leaves: 63
+      learning_rate: 0.03
+      n_estimators: 2000
+
+  catboost:
+    enabled: true
+    dependency_group: gbdt
+    role: categorical_baseline
+    supports_gpu: true
+    default_params:
+      loss_function: Logloss
+      eval_metric: AUC
+      depth: 8
+      learning_rate: 0.03
+      iterations: 2000
+
+  ydf:
+    enabled: false
+    dependency_group: gbdt
+    role: diversity_tree
+    supports_gpu: false
+
+  cuml_random_forest:
+    enabled: false
+    dependency_group: gpu
+    role: diversity_bagging
+    supports_gpu: true
+
+  embedding_mlp:
+    enabled: false
+    dependency_group: nn
+    role: neural_baseline
+    supports_gpu: true
+
+  realmlp:
+    enabled: false
+    dependency_group: nn
+    role: strong_neural_candidate
+    supports_gpu: true
+
+  tabm:
+    enabled: false
+    dependency_group: nn
+    role: multiplicative_interaction_neural
+    supports_gpu: true
+
+  dae_features:
+    enabled: false
+    dependency_group: nn
+    role: feature_extractor
+    supports_gpu: true
+

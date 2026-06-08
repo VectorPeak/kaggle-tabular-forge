@@ -1,0 +1,35 @@
+# Competition-level configuration.
+# Human-edited YAML. Validate with configs/schemas/competition.schema.json.
+
+competition:
+  name: playground-series-s6e3
+  kaggle_slug: playground-series-s6e3
+  task_type: binary_classification
+  metric: roc_auc
+  metric_mode: maximize
+  target: Churn
+  id_column: id
+
+data:
+  train: data/raw/train.csv
+  test: data/raw/test.csv
+  sample_submission: data/raw/sample_submission.csv
+  external:
+    original:
+      enabled: true
+      path: data/external/original.csv
+      description: Original/reference data used for anchor and synthetic fingerprint features.
+      leakage_review_required: true
+
+validation:
+  strategy: stratified_kfold
+  n_splits: 5
+  shuffle: true
+  seed: 42
+  group_column: null
+  time_column: null
+
+submission:
+  target_column: Churn
+  requires_human_approval: true
+

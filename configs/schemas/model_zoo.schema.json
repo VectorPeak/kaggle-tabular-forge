@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ModelZooConfig",
+  "type": "object",
+  "required": ["models"],
+  "properties": {
+    "models": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["enabled", "dependency_group", "role", "supports_gpu"],
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "dependency_group": { "type": "string" },
+          "role": { "type": "string" },
+          "supports_gpu": { "type": "boolean" },
+          "default_params": { "type": "object" }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
+

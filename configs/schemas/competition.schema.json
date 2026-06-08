@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CompetitionConfig",
+  "type": "object",
+  "required": ["competition", "data", "validation", "submission"],
+  "properties": {
+    "competition": {
+      "type": "object",
+      "required": ["name", "task_type", "metric", "metric_mode", "target", "id_column"],
+      "properties": {
+        "name": { "type": "string" },
+        "kaggle_slug": { "type": "string" },
+        "task_type": {
+          "type": "string",
+          "enum": ["binary_classification", "multiclass_classification", "regression", "ranking"]
+        },
+        "metric": { "type": "string" },
+        "metric_mode": { "type": "string", "enum": ["maximize", "minimize"] },
+        "target": { "type": "string" },
+        "id_column": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "required": ["train", "test", "sample_submission"],
+      "properties": {
+        "train": { "type": "string" },
+        "test": { "type": "string" },
+        "sample_submission": { "type": "string" },
+        "external": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "required": ["strategy", "n_splits", "seed"],
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["kfold", "stratified_kfold", "group_kfold", "time_series_split", "custom"]
+        },
+        "n_splits": { "type": "integer", "minimum": 2 },
+        "shuffle": { "type": "boolean" },
+        "seed": { "type": "integer" },
+        "group_column": { "type": ["string", "null"] },
+        "time_column": { "type": ["string", "null"] }
+      },
+      "additionalProperties": true
+    },
+    "submission": {
+      "type": "object",
+      "required": ["target_column", "requires_human_approval"],
+      "properties": {
+        "target_column": { "type": "string" },
+        "requires_human_approval": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
+

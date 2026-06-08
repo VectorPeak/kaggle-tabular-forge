@@ -1,0 +1,24 @@
+# Path configuration.
+# Keep paths relative to the repository root unless an environment override is required.
+
+paths:
+  data:
+    raw: data/raw
+    interim: data/interim
+    processed: data/processed
+    external: data/external
+  artifacts:
+    root: artifacts
+    experiments: artifacts/experiments
+    oof: artifacts/oof
+    submissions: artifacts/submissions
+    reports: artifacts/reports
+    llm_proposals: artifacts/llm_proposals
+  docs: docs
+  notebooks: notebooks
+  configs: configs
+
+environment:
+  dotenv: .env
+  kaggle_config_dir_env: KAGGLE_CONFIG_DIR
+

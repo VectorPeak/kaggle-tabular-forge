@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/kaggle-tabular-forge/goal.schema.json",
+  "title": "Goal",
+  "type": "object",
+  "required": ["goal", "budget"],
+  "properties": {
+    "goal": {
+      "type": "object",
+      "required": ["goal_id", "objective", "competition", "request"],
+      "properties": {
+        "goal_id": {
+          "type": "string",
+          "minLength": 3
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["parsed", "planned", "running", "completed", "rejected", "inconclusive", "blocked"]
+        },
+        "objective": {
+          "type": "string",
+          "enum": [
+            "eda",
+            "build_baseline",
+            "feature_test",
+            "improve_cv",
+            "ensemble",
+            "submit",
+            "debug_gap",
+            "build_evidence_pipeline"
+          ]
+        },
+        "competition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "budget": {
+      "type": "object",
+      "required": ["run_mode"],
+      "properties": {
+        "run_mode": {
+          "type": "string",
+          "enum": ["static_review", "smoke", "single_fold", "full_cv", "hpo"]
+        },
+        "wall_time": {
+          "type": ["string", "null"]
+        },
+        "gpu": {
+          "type": ["string", "null"]
+        },
+        "submissions": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "discovery": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": true
+}

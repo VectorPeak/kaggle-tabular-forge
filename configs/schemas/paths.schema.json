@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PathsConfig",
+  "type": "object",
+  "required": ["paths"],
+  "properties": {
+    "paths": {
+      "type": "object",
+      "required": ["data", "artifacts"],
+      "properties": {
+        "data": { "type": "object" },
+        "artifacts": { "type": "object" },
+        "docs": { "type": "string" },
+        "notebooks": { "type": "string" },
+        "configs": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "environment": { "type": "object" }
+  },
+  "additionalProperties": true
+}
+

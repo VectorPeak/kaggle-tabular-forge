@@ -1,0 +1,55 @@
+# AI Council configuration.
+# LLM providers are optional. Keep credentials in environment variables, never in config files.
+
+agents:
+  enabled: true
+  default_output_format: markdown_yaml
+  providers:
+    openai:
+      enabled: false
+      api_key_env: OPENAI_API_KEY
+      default_model: null
+    anthropic:
+      enabled: false
+      api_key_env: ANTHROPIC_API_KEY
+      default_model: null
+
+  roles:
+    director:
+      enabled: true
+      can_write_code: false
+      requires_human_approval_for_expensive_runs: true
+    data_auditor:
+      enabled: true
+      outputs:
+        - reports/eda
+        - leakage_watchlist
+    cv_architect:
+      enabled: true
+      outputs:
+        - validation_protocol
+    feature_forge:
+      enabled: true
+      can_write_code: true
+      requires_code_review: true
+    model_builder:
+      enabled: true
+      can_write_code: true
+      requires_smoke_test_before_full_cv: true
+    experiment_analyst:
+      enabled: true
+      can_claim_improvement_only_with_oof: true
+    code_reviewer:
+      enabled: true
+      can_block_runs: true
+    submission_strategist:
+      enabled: true
+      requires_human_approval_to_submit: true
+    infra_cost:
+      enabled: true
+      default_run_ladder:
+        - static_review
+        - smoke
+        - single_fold
+        - full_cv
+

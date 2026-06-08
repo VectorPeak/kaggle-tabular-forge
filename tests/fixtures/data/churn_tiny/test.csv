@@ -1,0 +1,8 @@
+id,tenure,MonthlyCharges,TotalCharges,Contract,InternetService,PaymentMethod
+101,2,36.0,72.0,Month-to-month,Fiber optic,Electronic check
+102,6,48.0,288.0,Month-to-month,Fiber optic,Electronic check
+103,12,62.0,744.0,Month-to-month,Fiber optic,Electronic check
+104,18,34.0,612.0,One year,DSL,Bank transfer
+105,24,42.0,1008.0,Two year,DSL,Credit card
+106,30,52.0,1560.0,Two year,DSL,Credit card
+

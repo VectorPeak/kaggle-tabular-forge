@@ -1,0 +1,44 @@
+# Single-experiment configuration.
+# Human-edited YAML. Validate with configs/schemas/experiment.schema.json.
+
+experiment:
+  experiment_id: 20260606-1430-lgbm-baseline-v1
+  competition: playground-series-s6e3
+  hypothesis: LightGBM baseline with core categorical and frequency features.
+  base_experiment: null
+  seed: 42
+  run_mode: smoke
+  tags:
+    - baseline
+    - gbdt
+
+data:
+  competition_config: configs/competition.example.yaml
+  feature_catalog: configs/feature_catalog.example.yaml
+
+features:
+  families:
+    - basic_numeric
+    - categorical_encoding
+    - frequency_count_encoding
+  cache: true
+
+model:
+  family: lightgbm
+  preset: baseline
+  params:
+    objective: binary
+    learning_rate: 0.03
+    num_leaves: 63
+    n_estimators: 2000
+
+validation:
+  use_competition_default: true
+  save_oof: true
+  save_fold_metrics: true
+
+outputs:
+  experiment_dir: artifacts/experiments/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
+  oof_dir: artifacts/oof/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
+  submission_dir: artifacts/submissions/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
+
