@@ -1,0 +1,15 @@
+# P3 ensemble example.
+# This config expects completed parent experiments in the registry.
+
+ensemble:
+  experiment_id: p03-ensemble-rank-average-example
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+  target: Churn
+  id_column: id
+  metric_name: roc_auc
+  method: rank_average
+  candidate_ids:
+    - p02-logistic-basic-example
+    - p02-lgbm-basic-example
+  weights: {}

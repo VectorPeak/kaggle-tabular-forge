@@ -24,6 +24,8 @@ IdColumnOption = Annotated[str, typer.Option("--id-column")]
 SplitsOption = Annotated[int, typer.Option("--n-splits")]
 SeedOption = Annotated[int, typer.Option("--seed")]
 TopNOption = Annotated[int, typer.Option("--top-n")]
+MaxRunsOption = Annotated[int | None, typer.Option("--max-runs")]
+DryRunOption = Annotated[bool, typer.Option("--dry-run")]
 
 
 @app.command("validate-config")
@@ -98,3 +100,43 @@ def compare(
         return
 
     typer.echo(frame.to_csv(index=False).rstrip())
+
+
+@app.command("ensemble")
+def ensemble(config: ConfigOption) -> None:
+    """Run an OOF-backed ensemble from a YAML config file."""
+    from ktabforge.ensembles.runner import run_ensemble_from_config
+
+    result = run_ensemble_from_config(config)
+    typer.echo(result.status)
+
+
+@app.command("factory")
+def factory(
+    config: ConfigOption,
+    dry_run: DryRunOption = False,
+    max_runs: MaxRunsOption = None,
+) -> None:
+    """Run or plan a matrix-driven candidate experiment factory."""
+    from ktabforge.factory.runner import run_factory_from_config
+
+    try:
+        result = run_factory_from_config(
+            config,
+            dry_run=dry_run,
+            max_runs=max_runs,
+        )
+    except ValueError as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"status: {result.status} planned: {result.planned_count} "
+        f"completed: {result.completed_count} failed: {result.failed_count} "
+        f"report: {result.report_path}"
+    )
+    if dry_run and result.plan_path.exists():
+        import pandas as pd
+
+        plan = pd.read_csv(result.plan_path)
+        if "experiment_id" in plan.columns:
+            typer.echo("planned_experiments: " + ", ".join(plan["experiment_id"].astype(str)))

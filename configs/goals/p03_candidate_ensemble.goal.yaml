@@ -1,0 +1,57 @@
+# P3 goal record.
+# Validate with configs/schemas/goal.schema.json.
+
+goal:
+  schema_version: goal.v0
+  goal_id: 20260609-p03-candidate-ensemble
+  created_at: "2026-06-09"
+  status: completed
+  objective: ensemble
+  competition: _project
+  request: Implement P3 candidate pool and lightweight ensemble SRC with OOF-backed artifacts.
+
+budget:
+  run_mode: smoke
+  wall_time: null
+  gpu: null
+  submissions: 0
+
+context:
+  metric: roc_auc
+  target: Churn
+  risk_tolerance: low
+
+discovery:
+  metric:
+    value: roc_auc
+    source: docs/p03_candidate_ensemble.md
+    confidence: high
+  target:
+    value: Churn
+    source: tests/fixtures/data/churn_tiny/train.csv
+    confidence: high
+  provenance:
+    configs:
+      - configs/goals/p03_candidate_ensemble.goal.yaml
+    docs:
+      - docs/p03_candidate_ensemble.md
+    artifacts: []
+
+acceptance:
+  required_capabilities:
+    - build candidate pool from completed registry rows
+    - reject missing or unsafe candidate prediction paths
+    - block misaligned OOF or test predictions
+    - run simple_average, rank_average, and weighted_average recipes
+    - write ensemble OOF, submission, metrics, manifest, candidate pool, and selection report
+    - append registry row with model_family=ensemble and parent lineage
+    - expose ktab ensemble --config
+  required_checks:
+    - uv run pytest -q
+    - uv run ruff check .
+  decision:
+    status: completed
+    reason: P3 SRC MVP implemented with tiny artifact integration tests.
+
+errors: []
+warnings: []

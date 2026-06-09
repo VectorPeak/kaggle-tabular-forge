@@ -1,6 +1,8 @@
 # P3 候选池与轻量 Ensemble
 
-P3 规划候选池和轻量 ensemble 阶段。本文是设计目标，不声称 ensemble 代码、artifact 或 registry 写入已经实现。
+P3 规划并实现候选池和轻量 ensemble 阶段。当前 MVP 已经包含 candidate pool、alignment gate、simple/rank/weighted average、ensemble artifact 写入、registry lineage 和 `ktab ensemble --config` 入口。
+
+本文仍然保留设计边界：P3 MVP 不做 public-LB-driven weight search、hill climbing、stacking、HPO 或自动 Kaggle submission。
 
 ## 目标
 
@@ -52,7 +54,7 @@ weight search、hill climbing、stacking 和 meta-model training 都延后，除
 
 ## 计划 Artifact
 
-P3 ensemble 计划写出：
+P3 ensemble MVP 写出：
 
 - `config.yaml`：parent experiment IDs 和 recipe 参数。
 - `run_manifest.json`：命令、时间、环境、输入路径。

@@ -1,0 +1,77 @@
+# P4 goal record.
+# Validate with configs/schemas/goal.schema.json.
+
+goal:
+  schema_version: goal.v0
+  goal_id: 20260609-p04-candidate-factory
+  created_at: "2026-06-09"
+  status: completed
+  objective: improve_cv
+  competition: _project
+  request: Implement P4 candidate experiment factory with matrix expansion, dry-run planning, sequential P2 execution, failure summary, and candidate report.
+
+budget:
+  run_mode: smoke
+  wall_time: null
+  gpu: null
+  submissions: 0
+
+context:
+  metric: roc_auc
+  target: Churn
+  risk_tolerance: low
+
+discovery:
+  metric:
+    value: roc_auc
+    source: docs/p04_candidate_factory.md
+    confidence: high
+  target:
+    value: Churn
+    source: tests/fixtures/data/churn_tiny/train.csv
+    confidence: high
+  provenance:
+    configs:
+      - configs/goals/p04_candidate_factory.goal.yaml
+    docs:
+      - docs/p04_candidate_factory.md
+    artifacts: []
+
+acceptance:
+  required_capabilities:
+    - expand matrix axes into deterministic P2 experiment configs
+    - reject duplicate or unsafe experiment_id values
+    - respect max_runs before calling the P2 runner
+    - support dry_run without writing OOF or submission artifacts
+    - execute expanded configs through the P2 runner
+    - record completed and failed runs in factory summaries
+    - write candidate_report.md with recommended candidate_ids
+    - expose ktab factory --config with --dry-run and --max-runs
+  required_checks:
+    - uv run pytest -q
+    - uv run ruff check .
+  decision:
+    status: completed
+    reason: P4 candidate factory MVP implemented with matrix, factory, CLI, docs, tests, and multi-agent review fixes.
+  verification:
+    run_at: "2026-06-09"
+    commands:
+      - command: uv run pytest -q
+        result: 35 passed in 59.69s
+      - command: uv run ruff check .
+        result: All checks passed!
+      - command: uv run ktab validate-config --config configs\matrices\p04_churn_candidate_factory.example.yaml --schema configs\schemas\matrix.schema.json
+        result: valid
+      - command: uv run ktab validate-config --config configs\goals\p04_candidate_factory.goal.yaml --schema configs\schemas\goal.schema.json
+        result: valid
+      - command: uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.example.yaml --dry-run --max-runs 1
+        result: "status: planned planned: 1 completed: 0 failed: 0"
+    agent_review_fixes:
+      - validate duplicate experiment_id values across the full matrix before max_runs truncation
+      - record skipped candidates when continue_on_error is false and a prior run fails
+      - reject unsafe matrix axes that can override artifact paths or competition routing
+      - require strict boolean continue_on_error and positive report.top_n
+      - escape Markdown report table cells and include config_hash/config_path for failed runs
+
+errors: []
+warnings: []
