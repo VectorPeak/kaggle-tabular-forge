@@ -6,12 +6,13 @@
 
 ## 当前阶段
 
-项目已经从 P1 最小可运行阶段进入 P2 实验工作台阶段，并已记录 P3 候选池与轻量 ensemble 方案。
+项目已经从 P1 最小可运行阶段进入 P2 实验工作台阶段，并完成 P3 候选池与轻量 ensemble 的 SRC MVP。
 
 - P0：项目基座、规则和验收标准，回答“Agent 与实验边界是否清楚？”
 - P1：实验证据流水线，回答“能否跑出可审计的 OOF、submission 和 registry？”
 - P2：配置驱动实验工作台，回答“能否批量运行、比较和追踪多个实验？”
-- P3：候选池与轻量 ensemble，回答“能否从可信候选中安全构造融合结果？”
+- P3：候选池与轻量 ensemble，回答“能否从可信候选中安全构造融合结果？”当前 MVP 已实现。
+- P4：候选实验工厂，回答“能否从 matrix 配置批量生产可信 P2 候选？”当前 MVP 已实现。
 
 当前 P2 已经具备：
 
@@ -83,6 +84,18 @@ uv run ktab run --config configs\experiments\p02_churn_lgbm_basic.example.yaml
 
 ```powershell
 uv run ktab compare --artifact-root artifacts --competition playground-series-s6e3 --top-n 10
+```
+
+运行 P3 ensemble：
+
+```powershell
+uv run ktab ensemble --config configs\ensembles\p03_candidate_ensemble.example.yaml
+```
+
+运行 P4 candidate factory dry-run：
+
+```powershell
+uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.example.yaml --dry-run
 ```
 
 生成的本地 artifact 会写入：
@@ -166,6 +179,7 @@ data/playground-series-s6e3/raw/sample_submission.csv
 - [docs/p01_evidence_pipeline.md](docs/p01_evidence_pipeline.md)：P1 最小可运行证据流水线。
 - [docs/p02_experiment_workbench.md](docs/p02_experiment_workbench.md)：P2 配置驱动实验工作台。
 - [docs/p03_candidate_ensemble.md](docs/p03_candidate_ensemble.md)：P3 候选池与轻量 ensemble 方案。
+- [docs/p04_candidate_factory.md](docs/p04_candidate_factory.md)：P4 候选实验工厂。
 - [docs/agent_integration.md](docs/agent_integration.md)：Codex 多 Agent / Skill / MCP 集成想法。
 - [docs/artifact_contract.md](docs/artifact_contract.md)：artifact 布局与 OOF 对齐。
 - [docs/leakage_rules.md](docs/leakage_rules.md)：泄漏与 public leaderboard 规则。

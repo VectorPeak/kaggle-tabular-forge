@@ -1,0 +1,54 @@
+# P4 candidate factory example.
+# Dry run first:
+# uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.example.yaml --dry-run
+
+factory:
+  factory_id: p04-churn-candidate-factory-example
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+  continue_on_error: true
+  max_runs: 2
+
+base_experiment:
+  experiment:
+    competition: playground-series-s6e3
+    hypothesis: Matrix-generated P4 candidate.
+    seed: 42
+    run_mode: smoke
+    tags:
+      - p04
+      - matrix
+  data:
+    data_dir: data/playground-series-s6e3/raw
+    artifact_root: artifacts
+    target: Churn
+    id_column: id
+  validation:
+    strategy: stratified_kfold
+    n_splits: 3
+    shuffle: true
+    seed: 42
+  features:
+    feature_set: basic_inferred
+    families:
+      - basic
+  model:
+    family: logistic_regression
+    preset: baseline
+    params:
+      max_iter: 1000
+
+matrix:
+  experiment_id_template: p04-{model.family}-{model.preset}-seed{experiment.seed}
+  axes:
+    model.family:
+      - logistic_regression
+    model.preset:
+      - baseline
+    experiment.seed:
+      - 42
+      - 2026
+
+report:
+  metric_name: roc_auc
+  top_n: 10

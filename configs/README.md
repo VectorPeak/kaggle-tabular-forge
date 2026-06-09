@@ -20,4 +20,20 @@ uv run ktab run --config configs\experiments\p02_churn_lgbm_basic.example.yaml
 
 命名约定：只有阶段性可运行示例配置使用 `pXX` 前缀，schemas 和全局契约配置保持语义命名。
 
+P3 ensemble 示例：
+
+```powershell
+uv run ktab ensemble --config configs\ensembles\p03_candidate_ensemble.example.yaml
+```
+
+注意：P3 ensemble 配置会读取已有 registry 中的 completed parent experiments。示例里的 parent `experiment_id` 需要已经存在并具备对齐的 OOF 与 submission artifact。
+
+P4 candidate factory 示例：
+
+```powershell
+uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.example.yaml --dry-run
+```
+
+P4 会从 matrix 配置展开多个 P2 experiment config。建议先 dry-run，确认 `experiment_id`、`max_runs` 和 artifact 路径后再执行。
+
 注意：示例里的 `experiment_id` 是固定的。重复运行同一个配置会因为 artifact 不允许覆盖而失败；需要重新运行时，请复制配置并改一个新的 `experiment_id`。

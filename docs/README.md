@@ -8,6 +8,7 @@
 - [P1 实验证据流水线](p01_evidence_pipeline.md)
 - [P2 配置驱动实验工作台](p02_experiment_workbench.md)
 - [P3 候选池与轻量 Ensemble](p03_candidate_ensemble.md)
+- [P4 候选实验工厂](p04_candidate_factory.md)
 
 ## 契约与参考
 

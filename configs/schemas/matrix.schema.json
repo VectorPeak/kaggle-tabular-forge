@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MatrixFactoryConfig",
+  "type": "object",
+  "required": ["factory", "base_experiment", "matrix"],
+  "properties": {
+    "factory": {
+      "type": "object",
+      "required": ["factory_id", "competition", "artifact_root"],
+      "properties": {
+        "factory_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "competition": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "artifact_root": { "type": "string", "minLength": 1 },
+        "continue_on_error": { "type": "boolean" },
+        "max_runs": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "base_experiment": { "type": "object" },
+    "matrix": {
+      "type": "object",
+      "required": ["experiment_id_template", "axes"],
+      "properties": {
+        "experiment_id_template": { "type": "string", "minLength": 1 },
+        "axes": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "allOf": [
+              {
+                "pattern": "^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+$"
+              },
+              {
+                "not": {
+                  "enum": [
+                    "data.artifact_root",
+                    "experiment.competition",
+                    "experiment.experiment_id",
+                    "outputs"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "pattern": "^outputs\\."
+                }
+              }
+            ]
+          },
+          "additionalProperties": {
+            "type": "array",
+            "minItems": 1
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "metric_name": { "type": "string" },
+        "top_n": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
