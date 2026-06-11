@@ -1,52 +1,20 @@
-# OOF-backed ensemble and stacking configuration.
+# P5.0 stacking preflight example.
+# This prepares stack matrices and selection artifacts only.
+# It does not train a stacker or write a completed registry row.
+#
+# Run:
+# uv run ktab stack-preflight --config configs\stacking.example.yaml
 
-ensemble:
-  candidate_pool:
-    source: artifacts/oof
-    require_oof: true
-    require_test_predictions: true
-    max_correlation: 0.995
-    min_oof_score: null
-
-  prediction_artifacts:
-    preferred_oof_format: parquet
-    fast_oof_format: npy
-    preferred_prediction_format: npy
-    naming:
-      oof: oof_<description>_v<version>.npy
-      prediction: pred_<description>_v<version>.npy
-
-  methods:
-    simple_average:
-      enabled: true
-    rank_average:
-      enabled: true
-    weighted_average:
-      enabled: true
-    greedy_hill_climbing:
-      enabled: true
-      metric_source: oof
-      max_models: 150
-      min_gain: 0.0
-    logistic_stacker:
-      enabled: true
-      penalty: l2
-      metric_source: oof
-      requires_nested_oof: true
-
-  levels:
-    level_0:
-      description: Original feature models.
-    level_1:
-      description: Base OOF predictions and feature extraction models.
-    level_2:
-      description: Models consuming earlier OOF predictions as features.
-      suffix: _stk
-    final:
-      description: Final logistic or linear meta learner.
-
-  safety:
-    no_public_lb_weight_search: true
-    require_lineage: true
-    require_human_approval_for_submission: true
-
+stacking:
+  experiment_id: p05-stack-preflight-example
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+  target: Churn
+  id_column: id
+  metric_name: roc_auc
+  candidate_ids:
+    - p02-logistic-basic-example
+    - p02-lgbm-basic-example
+  top_n: 10
+  max_parents: 2
+  min_parents: 2

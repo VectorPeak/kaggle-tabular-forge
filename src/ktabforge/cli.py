@@ -148,3 +148,19 @@ def factory(
         plan = pd.read_csv(result.plan_path)
         if "experiment_id" in plan.columns:
             typer.echo("planned_experiments: " + ", ".join(plan["experiment_id"].astype(str)))
+
+
+@app.command("stack-preflight")
+def stack_preflight(config: ConfigOption) -> None:
+    """Prepare stack matrices and selection artifacts without training a stacker."""
+    from ktabforge.stacking.runner import run_stacking_preflight
+
+    try:
+        result = run_stacking_preflight(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+    typer.echo(
+        f"{result.status} accepted: {result.accepted_count} rejected: "
+        f"{result.rejected_count} report: {result.selection_report_path}"
+    )

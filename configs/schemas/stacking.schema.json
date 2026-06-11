@@ -1,22 +1,36 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "StackingConfig",
+  "title": "StackingPreflightConfig",
   "type": "object",
-  "required": ["ensemble"],
+  "required": ["stacking"],
   "properties": {
-    "ensemble": {
+    "stacking": {
       "type": "object",
-      "required": ["candidate_pool", "methods", "safety"],
+      "required": [
+        "experiment_id",
+        "competition",
+        "artifact_root",
+        "target",
+        "id_column",
+        "metric_name"
+      ],
       "properties": {
-        "candidate_pool": { "type": "object" },
-        "prediction_artifacts": { "type": "object" },
-        "methods": { "type": "object" },
-        "levels": { "type": "object" },
-        "safety": { "type": "object" }
+        "experiment_id": { "type": "string", "minLength": 1 },
+        "competition": { "type": "string", "minLength": 1 },
+        "artifact_root": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "id_column": { "type": "string", "minLength": 1 },
+        "metric_name": { "type": "string", "minLength": 1 },
+        "candidate_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "top_n": { "type": ["integer", "null"], "minimum": 1 },
+        "max_parents": { "type": ["integer", "null"], "minimum": 1 },
+        "min_parents": { "type": ["integer", "null"], "minimum": 1 }
       },
       "additionalProperties": true
     }
   },
   "additionalProperties": true
 }
-

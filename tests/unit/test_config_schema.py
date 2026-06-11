@@ -37,3 +37,15 @@ def test_ensemble_example_matches_schema():
 
     assert result.valid is True
     assert result.errors == []
+
+
+def test_stacking_example_matches_schema():
+    repo_root = Path(__file__).resolve().parents[2]
+
+    result = validate_config_file(
+        repo_root / "configs" / "stacking.example.yaml",
+        repo_root / "configs" / "schemas" / "stacking.schema.json",
+    )
+
+    assert result.valid is True
+    assert result.errors == []
