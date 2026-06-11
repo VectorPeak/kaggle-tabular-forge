@@ -2,7 +2,7 @@
 
 `kaggle-tabular-forge` 是一个面向 Kaggle 表格赛的可复用实验框架。它的目标不是做一个“黑盒 AutoML”，而是把表格赛里最容易失真的部分先规范起来：配置、交叉验证、OOF 证据、artifact、实验对比、候选池和 ensemble。
 
-这个仓库当前已经完成 P0-P4 的基础骨架，重点是把“能跑”变成“可审计、可复现、可扩展”。
+这个仓库当前已经完成 P0-P5 的基础骨架，重点是把“能跑”变成“可审计、可复现、可扩展”。
 
 ## 项目目标
 
@@ -23,8 +23,12 @@
 - `P2` 配置驱动实验工作台：通过 YAML 运行、比较和追踪实验
 - `P3` 候选池与轻量 ensemble：基于 OOF 的安全融合能力
 - `P4` 候选实验工厂：通过 matrix 配置批量生成候选实验
+- `P5` stacking / selection 基础能力：配置约束、候选筛选、hill climbing、OOF-safe 一层 stacking
 
-`P5` 还没有完整落地，目前重点仍然是把 P0-P4 打磨扎实，确保后续 stacking、selection、final submission 建在可靠底座上。
+当前更适合把下一阶段理解为：
+
+- `P6`：更重的 EDA 驱动特征工程工作台
+- `P7`：pseudo-label、extra training 和 final candidate workflow
 
 ## 技术原则
 
@@ -115,6 +119,18 @@ uv run ktab factory `
 ```
 
 正式执行时去掉 `--dry-run`，也可以加 `--max-runs` 限制本次运行数量。
+
+### 7. 运行 P5 stacking preflight
+
+```powershell
+uv run ktab stack-preflight --config configs\stacking.example.yaml
+```
+
+### 8. 运行 P5 completed stacking
+
+```powershell
+uv run ktab stack --config configs\stacking.example.yaml
+```
 
 ## 依赖分组
 

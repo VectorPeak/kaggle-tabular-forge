@@ -2,6 +2,24 @@
 
 OOF predictions are the central asset for ensemble construction.
 
+## Current Status
+
+Current repository support covers:
+
+1. candidate-pool loading from registry-backed artifacts
+2. compatibility filtering for OOF-safe stacking inputs
+3. correlation-aware diversity selection
+4. OOF-backed greedy hill climbing
+5. first-level completed stacking with `logistic_regression` or `ridge_classifier`
+
+Operational constraints already enforced in code:
+
+- `top_n` must be applied after candidate compatibility and selection, not before
+- `max_parents` must act as an in-selection cap, not a post-hoc trim
+- `hill_climb_greedy` cannot be combined with `max_pairwise_corr`
+- stacking config rejects non-finite numeric values and unknown key typos
+- selection report / manifest must distinguish configured limits from effective limits
+
 ## Candidate Pool Strategy
 
 Target workflow:
@@ -64,6 +82,7 @@ Rules:
 
 - Hill climbing must use OOF, not public leaderboard.
 - Candidate order, metric, weights, and rejected candidates must be logged.
+- `min_gain` must be finite and non-negative.
 
 ## Logistic Regression Stacking
 
@@ -82,6 +101,7 @@ Rules:
 - The stacker itself must be trained with OOF-safe protocol.
 - Level 2 and Level 3 stacking must save their own OOF/test predictions.
 - Final stacker lineage must list all input experiments.
+- `preflight_only` is allowed for `stack-preflight`, but not for `ktab stack`.
 
 ## Multi-Level Stacking
 

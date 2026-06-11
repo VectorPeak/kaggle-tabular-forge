@@ -18,21 +18,20 @@
 
 ## 0x02. 当前阶段与路线
 
-当前仓库已经完成 P0-P4 地基：
+当前仓库已经完成 P0-P5 地基：
 
 1. `P0` 项目基座、规则、验收标准。
 2. `P1` 实验证据流水线。
 3. `P2` 配置驱动实验工作台。
 4. `P3` 候选池与轻量 ensemble。
 5. `P4` 候选实验工厂。
+6. `P5` stacking / selection 基础能力：配置约束、候选筛选、hill climbing、OOF-safe 一层 stacking。
 
-接下来的“重武器”路线按三期推进：
+接下来的“重武器”路线按两期推进：
 
-1. `P5`：EDA 驱动特征工程工作台 + 运行时底座  
+1. `P6`：EDA 驱动特征工程工作台 + 运行时底座  
    重点是可执行 EDA、fold-safe 特征工程、运行时后端抽象、预测载体抽象、registry 后端收口。
-2. `P6`：候选筛选 + hill climbing + 一层 stacking  
-   重点是 OOF correlation、候选多样性、greedy hill climbing、logistic/ridge stacker、Level-1 lineage。
-3. `P7`：pseudo-label + extra training + final candidate  
+2. `P7`：pseudo-label + extra training + final candidate  
    重点是 teacher provenance、半监督风险控制、final retrain、submission review pack。
 
 如果任务描述有歧义，优先改进契约、文档、示例和小型可验证脚手架，不要急着堆更多训练代码。
