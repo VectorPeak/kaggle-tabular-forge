@@ -9,7 +9,8 @@
 - [P2 配置驱动实验工作台](p02_experiment_workbench.md)
 - [P3 候选池与轻量 Ensemble](p03_candidate_ensemble.md)
 - [P4 候选实验工厂](p04_candidate_factory.md)
-- [Stacking / P5 基础能力](stacking.md)
+- [P5 Stacking / Selection 基础能力](p05_stacking_foundation.md)
+- [P6 Feature Workbench](p06_feature_workbench.md)
 
 ## 契约与参考
 
@@ -22,5 +23,5 @@
 - [Feature Catalog](feature_catalog.md)
 - [KGMON Methodology](kgmon_methodology.md)
 - [Model Zoo](model_zoo.md)
-- [Stacking](stacking.md)
+- [Stacking Reference](stacking.md)
 - [Testing Strategy](testing_strategy.md)

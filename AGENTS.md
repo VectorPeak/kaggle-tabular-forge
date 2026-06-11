@@ -106,9 +106,10 @@
 | KGMON/S6E3 方法论 | `docs/kgmon_methodology.md` | proposal、phase plan 或 review |
 | EDA / synthetic 关系 / 泄漏扫查 | `docs/goal_contract.md`、`docs/leakage_rules.md` | EDA 报告、watchlist、feature backlog |
 | 特征工程 | `docs/feature_catalog.md` 和 `docs/leakage_rules.md` | feature proposal、risk label、config |
+| P6 feature workbench | `docs/p06_feature_workbench.md`、`docs/feature_catalog.md` 和 `docs/leakage_rules.md` | EDA report、feature backlog、feature spec、feature build plan |
 | 模型族 / GPU 路线 | `docs/model_zoo.md` 和 `docs/environment_notes.md` | model config、backend 建议、依赖决策 |
 | 运行时后端 / 预测载体 / registry store | `docs/environment_notes.md` 和 `docs/artifact_contract.md` | runtime plan、format 决策、artifact contract |
-| Hill climbing / stacking | `docs/stacking.md` 和 `docs/artifact_contract.md` | candidate selection、stacking plan、lineage |
+| P5 stacking / selection | `docs/p05_stacking_foundation.md`、`docs/stacking.md` 和 `docs/artifact_contract.md` | candidate selection、stacking plan、lineage |
 | Pseudo-label / extra training | `docs/kgmon_methodology.md`、`docs/leakage_rules.md`、`docs/goal_contract.md` | 风险审查、teacher policy、promotion gate |
 | 路径、输出、manifest、lineage | `docs/artifact_contract.md` | artifact contract 或 registry 变更 |
 | 测试策略或测试数据集 | `docs/testing_strategy.md` | 测试计划、smoke 验收、阶段验证 |
@@ -187,37 +188,34 @@
 
 ## 0x09. P5-P7 重武器路线
 
-优先级顺序：`P5 > P6 > P7`
+阶段顺序：`P5 -> P6 -> P7`
 
-### P5：EDA 驱动特征工程工作台 + 运行时底座
+### P5：已完成的 stacking / selection 基础能力
+
+目标：
+
+- 从“轻量 averaging”升级到“OOF 驱动的候选选择与一层 stacking”。
+
+关键能力：
+
+- OOF correlation 与 diversity 约束。
+- greedy hill climbing。
+- `logistic_regression` / `ridge_classifier` 一层 stacker。
+- selection report、stacking manifest、registry lineage。
+
+### P6：EDA 驱动特征工程工作台 + 运行时底座
 
 目标：
 
 - 让 `EDA -> feature proposal -> fold-safe feature build -> OOF compare` 闭环可执行。
-- 把 CPU/GPU 后端、预测载体、registry store 抽象成一等公民。
+- 把更强的 candidate source 生产过程变成可配置、可审计的流水线。
 
 关键能力：
 
-- 结构化 EDA 报告、leakage watchlist、feature backlog。
-- `frequency/count`、binning、interactions、nested target encoding。
-- `ExecutionBackend`/`ModelAdapter` 抽象。
-- `parquet + npy` 双预测载体。
-- `csv|sqlite` 级别的 registry backend 规划。
-- 可控并发的 factory runtime。
-
-### P6：候选筛选 + hill climbing + 一层 stacking
-
-目标：
-
-- 从“轻量 averaging”升级到“OOF 驱动的选择与集成”。
-
-关键能力：
-
-- OOF correlation 报告。
-- candidate diversity 报告。
-- greedy hill climbing。
-- logistic/ridge stacker。
-- Level-1 stacker 的 OOF/test predictions、manifest、registry row、lineage。
+- 结构化 EDA 报告、`leakage_watchlist`、`feature_backlog`。
+- `frequency/count`、binning、interactions 等低风险特征家族。
+- fold-safe / nested-safe 的特征构建安全门。
+- execution backend、prediction carrier、registry backend 的最小抽象。
 
 ### P7：pseudo-label + extra training + final candidate
 

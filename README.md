@@ -132,6 +132,11 @@ uv run ktab stack-preflight --config configs\stacking.example.yaml
 uv run ktab stack --config configs\stacking.example.yaml
 ```
 
+更完整的阶段说明见：
+
+- [docs/p05_stacking_foundation.md](docs/p05_stacking_foundation.md)
+- [docs/p06_feature_workbench.md](docs/p06_feature_workbench.md)
+
 ## 依赖分组
 
 基础依赖已经包含：
@@ -229,6 +234,8 @@ kaggle-tabular-forge/
 5. [docs/p02_experiment_workbench.md](docs/p02_experiment_workbench.md)
 6. [docs/p03_candidate_ensemble.md](docs/p03_candidate_ensemble.md)
 7. [docs/p04_candidate_factory.md](docs/p04_candidate_factory.md)
+8. [docs/p05_stacking_foundation.md](docs/p05_stacking_foundation.md)
+9. [docs/p06_feature_workbench.md](docs/p06_feature_workbench.md)
 
 几个高频契约文档：
 
