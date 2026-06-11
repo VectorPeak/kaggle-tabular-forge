@@ -56,3 +56,33 @@ uv run ktab eda scan --config configs\eda\p06_churn_eda.example.yaml
 ```text
 artifacts/eda_findings/<competition>/<eda_id>/
 ```
+
+P6.2 proposal 示例：
+
+```powershell
+uv run ktab proposal validate --config configs\proposals\p06_freq_count.example.yaml
+uv run ktab proposal register --config configs\proposals\p06_freq_count.example.yaml
+```
+
+默认 proposal artifact 目录：
+
+```text
+artifacts/proposals/<competition>/<proposal_id>/
+```
+
+P6.2 feature build 示例：
+
+```powershell
+uv run ktab feature build --config configs\features\p06_freq_bundle.example.yaml
+```
+
+这个命令会输出增强版特征表和构建 manifest：
+
+```text
+artifacts/features/<competition>/<feature_build_id>/
+  train_features.parquet
+  test_features.parquet
+  feature_build_manifest.json
+  feature_schema.json
+  feature_build_report.md
+```

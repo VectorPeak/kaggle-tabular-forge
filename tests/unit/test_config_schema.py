@@ -61,3 +61,27 @@ def test_eda_example_matches_schema():
 
     assert result.valid is True
     assert result.errors == []
+
+
+def test_proposal_example_matches_schema():
+    repo_root = Path(__file__).resolve().parents[2]
+
+    result = validate_config_file(
+        repo_root / "configs" / "proposals" / "p06_freq_count.example.yaml",
+        repo_root / "configs" / "schemas" / "proposal.schema.json",
+    )
+
+    assert result.valid is True
+    assert result.errors == []
+
+
+def test_feature_pipeline_example_matches_schema():
+    repo_root = Path(__file__).resolve().parents[2]
+
+    result = validate_config_file(
+        repo_root / "configs" / "features" / "p06_freq_bundle.example.yaml",
+        repo_root / "configs" / "schemas" / "feature_pipeline.schema.json",
+    )
+
+    assert result.valid is True
+    assert result.errors == []

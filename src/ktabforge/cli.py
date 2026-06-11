@@ -7,6 +7,8 @@ from ktabforge.config.schema import validate_config_file
 
 app = typer.Typer(help="Evidence-first tools for Kaggle tabular workflows.")
 eda_app = typer.Typer(help="EDA scan tools.")
+proposal_app = typer.Typer(help="Proposal tools.")
+feature_app = typer.Typer(help="Feature build tools.")
 
 ConfigOption = Annotated[
     Path, typer.Option("--config", exists=True, file_okay=True, dir_okay=False)
@@ -29,6 +31,8 @@ MaxRunsOption = Annotated[int | None, typer.Option("--max-runs")]
 DryRunOption = Annotated[bool, typer.Option("--dry-run")]
 
 app.add_typer(eda_app, name="eda")
+app.add_typer(proposal_app, name="proposal")
+app.add_typer(feature_app, name="feature")
 
 
 @app.command("validate-config")
@@ -215,3 +219,60 @@ def eda_scan(config: ConfigOption) -> None:
     eda_id = getattr(result, "eda_id", None) or "unknown"
     artifact_dir = getattr(result, "artifact_dir", None) or ""
     typer.echo(f"status: {status} eda_id: {eda_id} artifact_dir: {artifact_dir}")
+
+
+@proposal_app.command("validate")
+def proposal_validate(config: ConfigOption) -> None:
+    """Validate a proposal config file."""
+    from ktabforge.proposals.runner import validate_proposal_config
+
+    try:
+        result = validate_proposal_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = getattr(result, "status", None) or "valid"
+    proposal_id = getattr(result, "proposal_id", None) or "unknown"
+    artifact_dir = getattr(result, "artifact_dir", None) or ""
+    typer.echo(
+        f"status: {status} proposal_id: {proposal_id} artifact_dir: {artifact_dir}"
+    )
+
+
+@proposal_app.command("register")
+def proposal_register(config: ConfigOption) -> None:
+    """Register a proposal config file and write proposal artifacts."""
+    from ktabforge.proposals.runner import register_proposal_from_config
+
+    try:
+        result = register_proposal_from_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = getattr(result, "status", None) or "registered"
+    proposal_id = getattr(result, "proposal_id", None) or "unknown"
+    artifact_dir = getattr(result, "artifact_dir", None) or ""
+    typer.echo(
+        f"status: {status} proposal_id: {proposal_id} artifact_dir: {artifact_dir}"
+    )
+
+
+@feature_app.command("build")
+def feature_build(config: ConfigOption) -> None:
+    """Build configured tabular features and write feature artifacts."""
+    from ktabforge.features.pipeline import run_feature_build_from_config
+
+    try:
+        result = run_feature_build_from_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = getattr(result, "status", None) or "completed"
+    feature_build_id = getattr(result, "feature_build_id", None) or "unknown"
+    artifact_dir = getattr(result, "artifact_dir", None) or ""
+    typer.echo(
+        f"status: {status} feature_build_id: {feature_build_id} artifact_dir: {artifact_dir}"
+    )

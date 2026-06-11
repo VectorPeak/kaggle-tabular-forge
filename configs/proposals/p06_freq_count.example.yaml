@@ -1,0 +1,17 @@
+proposal:
+  proposal_id: p06-freq-count
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+  owner: eda_scan
+
+feature:
+  feature_id: freq-contract
+  feature_family: frequency_count
+  source_columns:
+    - Contract
+  hypothesis: Frequency encoding on Contract may expose stable density effects.
+  validation_plan: compare OOF against baseline
+  requires_target: false
+  fold_safety: global_safe
+  leakage_risk: low
+  transductive_risk: low

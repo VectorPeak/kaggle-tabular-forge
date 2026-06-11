@@ -1,0 +1,32 @@
+feature_build:
+  feature_build_id: p06-freq-bundle-example
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+
+data:
+  data_dir: data/playground-series-s6e3/raw
+  target: Churn
+  id_column: id
+
+transforms:
+  - type: frequency
+    columns:
+      - Contract
+      - InternetService
+    mode: count
+    fit_on: train_only
+
+  - type: binning
+    columns:
+      - tenure
+      - MonthlyCharges
+    bins: 8
+    strategy: quantile
+
+  - type: arithmetic_interactions
+    pairs:
+      - left: MonthlyCharges
+        right: tenure
+        operations:
+          - mul
+          - div
