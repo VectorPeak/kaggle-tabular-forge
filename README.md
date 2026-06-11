@@ -1,41 +1,49 @@
 # kaggle-tabular-forge
 
-`kaggle-tabular-forge` 是一个面向 Kaggle 表格赛的可复用实验框架。它的核心不是黑箱 AutoML，而是：用严格的 CV/OOF 证据、可追踪 artifact、实验 registry 和安全 gate，把特征、模型、ensemble 想法一步步锻造成可信结果。
+`kaggle-tabular-forge` 是一个面向 Kaggle 表格赛的可复用实验框架。它的目标不是做一个“黑盒 AutoML”，而是把表格赛里最容易失真的部分先规范起来：配置、交叉验证、OOF 证据、artifact、实验对比、候选池和 ensemble。
 
-项目受到 NVIDIA/KGMON S6E3 这类高吞吐竞赛系统启发：人类制定策略，LLM 辅助提出假设，所有结论都必须经过 OOF 和 artifact 证明。
+这个仓库当前已经完成 P0-P4 的基础骨架，重点是把“能跑”变成“可审计、可复现、可扩展”。
+
+## 项目目标
+
+我们希望把一场表格赛拆成几层稳定能力：
+
+- 证据优先：任何结论都要有 OOF、CV 和 artifact 支撑
+- 配置驱动：实验不靠散落脚本，尽量通过 YAML 配置描述
+- 候选池化：先批量产生候选，再做筛选、融合和堆叠
+- 对 Agent 友好：便于 Codex / LLM Agent 在明确边界内协作
+- 对新比赛可迁移：换数据集时，尽量复用同一套工作流
 
 ## 当前阶段
 
-项目已经从 P1 最小可运行阶段进入 P2 实验工作台阶段，并完成 P3 候选池与轻量 ensemble 的 SRC MVP。
+目前仓库已经覆盖以下阶段：
 
-- P0：项目基座、规则和验收标准，回答“Agent 与实验边界是否清楚？”
-- P1：实验证据流水线，回答“能否跑出可审计的 OOF、submission 和 registry？”
-- P2：配置驱动实验工作台，回答“能否批量运行、比较和追踪多个实验？”
-- P3：候选池与轻量 ensemble，回答“能否从可信候选中安全构造融合结果？”当前 MVP 已实现。
-- P4：候选实验工厂，回答“能否从 matrix 配置批量生产可信 P2 候选？”当前 MVP 已实现。
+- `P0` 项目基座：文档、规则、验收标准、配置约定
+- `P1` 实验证据流水线：最小可运行的 OOF / submission / registry 流程
+- `P2` 配置驱动实验工作台：通过 YAML 运行、比较和追踪实验
+- `P3` 候选池与轻量 ensemble：基于 OOF 的安全融合能力
+- `P4` 候选实验工厂：通过 matrix 配置批量生成候选实验
 
-当前 P2 已经具备：
+`P5` 还没有完整落地，目前重点仍然是把 P0-P4 打磨扎实，确保后续 stacking、selection、final submission 建在可靠底座上。
 
-- `uv`/`pyproject.toml` 项目环境。
-- `src/ktabforge` Python 包。
-- `ktab` CLI。
-- 配置 schema 校验。
-- `ktab run --config` 配置驱动实验入口。
-- `ktab compare` registry 对比入口。
-- tiny churn fixture。
-- StratifiedKFold OOF baseline。
-- Logistic Regression smoke baseline。
-- LightGBM smoke baseline。
-- OOF、submission、metrics、manifest、registry artifact 写入。
-- config snapshot 与 config hash。
-- pytest 与 ruff 验证。
+## 技术原则
+
+这个项目有几个硬约束：
+
+- 没有 OOF / CV 证据的提升，不算有效提升
+- 不允许把 leaderboard 偶然性当成真实收益
+- 实验结果必须能回溯到配置、命令、模型、特征和输出文件
+- 先做最小但诚实的 baseline，再逐步扩展复杂度
+- 任何自动化能力都要服从泄漏检查和可复现边界
 
 ## 快速开始
+
+推荐使用 `uv` 管理 Python 环境。
 
 ```powershell
 cd E:\Github\kaggle-tabular-forge
 uv sync --group dev
-uv run pytest
+uv run pytest -q
 uv run ruff check .
 ```
 
@@ -45,15 +53,19 @@ uv run ruff check .
 uv run ktab --help
 ```
 
-校验配置：
+## 常用命令
+
+### 1. 校验配置
 
 ```powershell
 uv run ktab validate-config `
-  --config configs\competition.example.yaml `
-  --schema configs\schemas\competition.schema.json
+  --config configs\experiment.example.yaml `
+  --schema configs\schemas\experiment.schema.json
 ```
 
-运行 P1 tiny smoke：
+### 2. 运行 P1 smoke 流水线
+
+这一步使用仓库自带的 tiny churn fixture，不依赖外部 Kaggle 下载。
 
 ```powershell
 uv run ktab smoke `
@@ -67,52 +79,152 @@ uv run ktab smoke `
   --seed 42
 ```
 
-运行 P2 配置驱动实验：
+### 3. 运行 P2 配置驱动实验
 
 ```powershell
 uv run ktab run --config configs\experiments\p02_churn_logistic_basic.example.yaml
 ```
 
-运行 LightGBM 示例前先安装可选依赖：
+如果要运行 LightGBM 示例，需要额外安装可选依赖：
 
 ```powershell
 uv sync --group dev --extra lgbm
 uv run ktab run --config configs\experiments\p02_churn_lgbm_basic.example.yaml
 ```
 
-比较已有实验：
+### 4. 比较实验结果
 
 ```powershell
 uv run ktab compare --artifact-root artifacts --competition playground-series-s6e3 --top-n 10
 ```
 
-运行 P3 ensemble：
+### 5. 运行 P3 ensemble
 
 ```powershell
 uv run ktab ensemble --config configs\ensembles\p03_candidate_ensemble.example.yaml
 ```
 
-运行 P4 candidate factory dry-run：
+### 6. 运行 P4 candidate factory
+
+先 dry-run 看计划：
 
 ```powershell
-uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.example.yaml --dry-run
+uv run ktab factory `
+  --config configs\matrices\p04_churn_candidate_factory.example.yaml `
+  --dry-run
 ```
 
-生成的本地 artifact 会写入：
+正式执行时去掉 `--dry-run`，也可以加 `--max-runs` 限制本次运行数量。
+
+## 依赖分组
+
+基础依赖已经包含：
+
+- `numpy`
+- `pandas`
+- `pyarrow`
+- `scikit-learn`
+- `typer`
+- `jsonschema`
+- `pyyaml`
+- `rich`
+- `joblib`
+
+可选依赖通过 `pyproject.toml` 分组管理：
+
+- `lgbm`：LightGBM
+- `xgb`：XGBoost
+- `cat`：CatBoost
+- `gbdt`：常见 GBDT 家族合集
+- `llm`：`openai` / `anthropic` 等 Agent 能力
+- `kaggle`：Kaggle API 相关依赖
+- `viz`：可视化依赖
+
+示例：
+
+```powershell
+uv sync --group dev --extra lgbm --extra llm
+```
+
+## 数据与 Artifact
+
+本仓库默认区分两类数据：
+
+- `tests/fixtures/data/`：仓库内测试数据，用于 smoke / unit / integration
+- `data/<competition>/raw/`：你本地放置的真实比赛数据，不提交到 git
+
+推荐的真实数据目录：
+
+```text
+data/
+└── playground-series-s6e3/
+    └── raw/
+        ├── train.csv
+        ├── test.csv
+        └── sample_submission.csv
+```
+
+运行产物会写入 `artifacts/`，大致结构如下：
 
 ```text
 artifacts/
-├── experiments/<competition>/<experiment_id>/      # metrics、manifest、fold metrics、review
-├── oof/<competition>/<experiment_id>/              # oof.parquet
-├── submissions/<competition>/<experiment_id>/      # submission.csv
-└── registry/<competition>/                         # experiment_registry.csv
+├── experiments/<competition>/<experiment_id>/    # metrics, manifest, fold metrics, review
+├── oof/<competition>/<experiment_id>/            # oof.parquet
+├── submissions/<competition>/<experiment_id>/    # submission.csv
+├── registry/<competition>/                       # experiment_registry.csv
+└── failures/<competition>/<experiment_id>/       # 失败运行记录
 ```
 
-`artifacts/` 和真实 `data/` 默认不提交到 git。
+## 项目结构
+
+```text
+kaggle-tabular-forge/
+├── AGENTS.md                 # Agent 总纲与最高优先级规则
+├── README.md                 # 人类主入口
+├── pyproject.toml            # uv / Python 项目配置
+├── configs/                  # YAML 配置与 JSON Schema
+├── docs/                     # 方案、契约、路线图与方法论
+├── src/ktabforge/            # 核心源码
+├── tests/                    # 单测、集成测试、fixture
+├── data/                     # 本地真实比赛数据
+└── artifacts/                # 实验产物输出
+```
+
+`src/ktabforge/` 里当前主要模块可以这样理解：
+
+- `config/`：配置加载、schema 校验、安全命名约束
+- `pipeline/`：实验运行主流程
+- `artifacts/`：输出文件布局、manifest、失败记录
+- `models/`：模型注册与基线实现
+- `features/`：特征集定义
+- `ensembles/`：P3 融合逻辑
+- `factory/`：P4 候选实验工厂
+- `reports/`：结果比较与汇总
+- `safety/`：泄漏和运行安全规则
+
+## 文档导航
+
+如果你要快速理解整个仓库，建议按下面顺序看：
+
+1. [AGENTS.md](AGENTS.md)
+2. [docs/README.md](docs/README.md)
+3. [docs/p00_project_foundation.md](docs/p00_project_foundation.md)
+4. [docs/p01_evidence_pipeline.md](docs/p01_evidence_pipeline.md)
+5. [docs/p02_experiment_workbench.md](docs/p02_experiment_workbench.md)
+6. [docs/p03_candidate_ensemble.md](docs/p03_candidate_ensemble.md)
+7. [docs/p04_candidate_factory.md](docs/p04_candidate_factory.md)
+
+几个高频契约文档：
+
+- [docs/goal_contract.md](docs/goal_contract.md)
+- [docs/artifact_contract.md](docs/artifact_contract.md)
+- [docs/leakage_rules.md](docs/leakage_rules.md)
+- [docs/testing_strategy.md](docs/testing_strategy.md)
+- [docs/agent_protocol.md](docs/agent_protocol.md)
 
 ## `/goal` 约定
 
-人类输入应保持简短：
+这个仓库预留了面向 Agent 的目标驱动入口，输入可以尽量短：
 
 ```text
 /goal objective=<objective> competition=<competition> request="<intent>" budget=<budget>
@@ -124,85 +236,37 @@ artifacts/
 /goal objective=build_baseline competition=playground-series-s6e3 request="build first honest LightGBM baseline with OOF artifacts" budget=single_fold
 ```
 
-系统应先从 configs、registry 和已有 artifact 中自动发现 metric、target、路径、CV 默认值、当前最佳实验和 artifact 路径，然后再追问缺失信息。
+完整约定见 [docs/goal_contract.md](docs/goal_contract.md)。
 
-完整契约见 [docs/goal_contract.md](docs/goal_contract.md)。
+## 测试
 
-## 测试数据
+当前建议至少执行这三类检查：
 
-默认测试使用仓库内 tiny churn fixture，不依赖真实 Kaggle 下载：
-
-```text
-tests/fixtures/data/churn_tiny/
-├── train.csv
-├── test.csv
-└── sample_submission.csv
+```powershell
+uv run pytest -q
+uv run ruff check .
+uv run ktab validate-config --config configs\experiment.example.yaml --schema configs\schemas\experiment.schema.json
 ```
 
-真实 Kaggle 客户流失数据后续作为 `local_data` 层接入，推荐本地路径：
+如果你改动了 ensemble 或 factory，建议额外跑对应的集成测试和示例配置。
 
-```text
-data/playground-series-s6e3/raw/train.csv
-data/playground-series-s6e3/raw/test.csv
-data/playground-series-s6e3/raw/sample_submission.csv
-```
+## 适合谁用
 
-## 证据规则
+这个仓库更适合下面几类场景：
 
-一个实验只有具备对应证据时才算可信：
+- 想把 Kaggle 表格赛流程沉淀成长期可复用工程的人
+- 想让 LLM / Agent 参与实验，但不想让流程变成黑箱的人
+- 想先把证据链、配置、artifact 和对比系统搭好的团队
+- 想从单场比赛脚本堆，演化到通用实验平台的人
 
-- config
-- command
-- CV protocol
-- OOF predictions
-- fold metrics
-- test predictions 或 submission
-- feature/model manifests
-- leakage review
-- reproducibility metadata
-- experiment registry record
+## 当前状态说明
 
-没有 OOF/CV 证据、日志和可复现命令时，任何结论都只能算 hypothesis。
+这不是一个已经“功能全部完成”的通用 AutoML 产品。更准确地说，它是一个正在成型的、以证据和流程为核心的 Kaggle 表格赛工作台。
 
-## 文档索引
+如果你现在要开始用它，最合适的方式是：
 
-入口文档：
+1. 用 `tests/fixtures/data/churn_tiny` 跑通最小流程
+2. 用 `configs/experiments/` 下的示例配置跑通 P2
+3. 再接入你自己的比赛数据和候选实验矩阵
 
-- [AGENTS.md](AGENTS.md)：Agent 不可违反的规则与任务路由。
-- [README.md](README.md)：人类入口、项目阶段、快速命令。
-
-核心契约：
-
-- [docs/README.md](docs/README.md)：文档索引与渐进式披露导航。
-- [docs/goal_contract.md](docs/goal_contract.md)：`/goal` 输入与验收。
-- [docs/p00_project_foundation.md](docs/p00_project_foundation.md)：P0 项目基座、规则与验收标准。
-- [docs/p01_evidence_pipeline.md](docs/p01_evidence_pipeline.md)：P1 最小可运行证据流水线。
-- [docs/p02_experiment_workbench.md](docs/p02_experiment_workbench.md)：P2 配置驱动实验工作台。
-- [docs/p03_candidate_ensemble.md](docs/p03_candidate_ensemble.md)：P3 候选池与轻量 ensemble 方案。
-- [docs/p04_candidate_factory.md](docs/p04_candidate_factory.md)：P4 候选实验工厂。
-- [docs/agent_integration.md](docs/agent_integration.md)：Codex 多 Agent / Skill / MCP 集成想法。
-- [docs/artifact_contract.md](docs/artifact_contract.md)：artifact 布局与 OOF 对齐。
-- [docs/leakage_rules.md](docs/leakage_rules.md)：泄漏与 public leaderboard 规则。
-- [docs/testing_strategy.md](docs/testing_strategy.md)：测试层级与客户流失数据集。
-
-方法论与系统设计：
-
-- [docs/kgmon_methodology.md](docs/kgmon_methodology.md)：方法论与阶段路线图。
-- [docs/agent_protocol.md](docs/agent_protocol.md)：Agent 角色、输入输出与任务图。
-- [docs/feature_catalog.md](docs/feature_catalog.md)：特征家族与风险标签。
-- [docs/model_zoo.md](docs/model_zoo.md)：模型家族与依赖分组。
-- [docs/stacking.md](docs/stacking.md)：OOF-backed ensemble、hill climbing、stacking。
-- [docs/environment_notes.md](docs/environment_notes.md)：环境、依赖、Windows/WSL/Kaggle 边界。
-
-## 当前项目结构
-
-```text
-kaggle-tabular-forge/
-├── AGENTS.md                         # Agent 总纲
-├── README.md                         # 人类入口
-├── pyproject.toml                    # uv/Python 项目配置
-├── configs/                          # 人类可编辑配置与 JSON Schema
-├── docs/                             # 设计、契约、路线图
-├── src/ktabforge/                    # P1 Python 包
-└── tests/                            # unit/integration/smoke 测试
-```
+后续如果需要，我可以继续把 `docs/README.md`、`configs/README.md` 和各阶段文档一起统一整理成完全中文化版本。
