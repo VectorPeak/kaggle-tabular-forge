@@ -191,6 +191,52 @@ def test_candidate_pool_sorts_min_metric_ascending(tmp_path):
     ]
 
 
+def test_candidate_pool_keeps_explicit_candidate_ids_even_when_top_n_is_smaller(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.1, 0.8, 0.3, 0.9],
+            test_predictions=[0.2, 0.7],
+            score=0.95,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.2, 0.7, 0.4, 0.8],
+            test_predictions=[0.3, 0.6],
+            score=0.94,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-c",
+            oof_predictions=[0.3, 0.6, 0.5, 0.7],
+            test_predictions=[0.4, 0.5],
+            score=0.93,
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+
+    pool = build_candidate_pool(
+        artifact_root=artifact_root,
+        competition=competition,
+        metric_name="roc_auc",
+        candidate_ids=["candidate-a", "candidate-b", "candidate-c"],
+        top_n=1,
+    )
+
+    assert [candidate.experiment_id for candidate in pool.candidates] == [
+        "candidate-a",
+        "candidate-b",
+        "candidate-c",
+    ]
+
+
 def test_ensemble_runner_blocks_misaligned_test_predictions(tmp_path):
     artifact_root = tmp_path / "artifacts"
     competition = "churn_tiny"

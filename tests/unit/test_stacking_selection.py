@@ -174,3 +174,66 @@ def test_apply_selection_policy_hill_climb_greedy_keeps_improving_candidates_onl
     rejected_by_id = {item.experiment_id: item.reason for item in result.rejected}
     assert "candidate-c" in rejected_by_id
     assert "min_gain" in rejected_by_id["candidate-c"]
+
+
+def test_apply_selection_policy_score_desc_applies_max_selected_limit():
+    candidates = [
+        _candidate(
+            "candidate-a",
+            score=0.91,
+            predictions=[0.10, 0.90, 0.20, 0.80, 0.15, 0.85],
+        ),
+        _candidate(
+            "candidate-b",
+            score=0.90,
+            predictions=[0.11, 0.89, 0.21, 0.79, 0.14, 0.86],
+        ),
+        _candidate(
+            "candidate-c",
+            score=0.88,
+            predictions=[0.30, 0.78, 0.25, 0.72, 0.45, 0.88],
+        ),
+    ]
+
+    result = apply_selection_policy(
+        candidates,
+        rejected=[],
+        strategy="score_desc",
+        max_pairwise_corr=None,
+        max_selected=2,
+    )
+
+    assert [candidate.experiment_id for candidate in result.accepted] == [
+        "candidate-a",
+        "candidate-b",
+    ]
+
+
+def test_apply_selection_policy_rejects_max_pairwise_corr_outside_diversity_greedy():
+    candidates = [
+        _candidate(
+            "candidate-a",
+            score=0.91,
+            predictions=[0.10, 0.90, 0.20, 0.80, 0.15, 0.85],
+        ),
+        _candidate(
+            "candidate-b",
+            score=0.90,
+            predictions=[0.11, 0.89, 0.21, 0.79, 0.14, 0.86],
+        ),
+    ]
+
+    try:
+        apply_selection_policy(
+            candidates,
+            rejected=[],
+            strategy="hill_climb_greedy",
+            max_pairwise_corr=0.99,
+            metric_name="roc_auc",
+            target="Churn",
+        )
+    except ValueError as exc:
+        assert "max_pairwise_corr" in str(exc)
+        assert "diversity_greedy" in str(exc)
+    else:
+        raise AssertionError("hill_climb_greedy should reject max_pairwise_corr constraints")

@@ -65,6 +65,9 @@ class _SelectedCandidates:
     rejected: list[CandidateCompatibilityRejection]
     pairwise_correlations: list[PairwiseCorrelation]
     hill_climb_trace: list[HillClimbStep]
+    effective_top_n: int | None
+    effective_max_parents: int | None
+    effective_selection_max_pairwise_corr: float | None
 
 
 @dataclass(frozen=True)
@@ -76,12 +79,12 @@ class _TrainedStack:
 
 
 def run_stacking_preflight(config_path: str | Path) -> StackingPreflightResult:
-    config = load_stacking_config(config_path)
+    config = load_stacking_config(config_path, runtime="preflight")
     return run_preflight(config)
 
 
 def run_stack_from_config(config_path: str | Path) -> StackRunResult:
-    config = load_stacking_config(config_path)
+    config = load_stacking_config(config_path, runtime="stack")
     return run_stack(config)
 
 
@@ -116,6 +119,9 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
             pairwise_correlations=selection.pairwise_correlations,
             hill_climb_trace=selection.hill_climb_trace,
             config=config,
+            effective_top_n=selection.effective_top_n,
+            effective_max_parents=selection.effective_max_parents,
+            effective_selection_max_pairwise_corr=selection.effective_selection_max_pairwise_corr,
         ),
     )
     write_json(
@@ -126,6 +132,9 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
             hill_climb_trace=selection.hill_climb_trace,
+            effective_top_n=selection.effective_top_n,
+            effective_max_parents=selection.effective_max_parents,
+            effective_selection_max_pairwise_corr=selection.effective_selection_max_pairwise_corr,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -204,6 +213,9 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
             pairwise_correlations=selection.pairwise_correlations,
             hill_climb_trace=selection.hill_climb_trace,
             config=config,
+            effective_top_n=selection.effective_top_n,
+            effective_max_parents=selection.effective_max_parents,
+            effective_selection_max_pairwise_corr=selection.effective_selection_max_pairwise_corr,
         ),
     )
     write_json(
@@ -214,6 +226,9 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
             hill_climb_trace=selection.hill_climb_trace,
+            effective_top_n=selection.effective_top_n,
+            effective_max_parents=selection.effective_max_parents,
+            effective_selection_max_pairwise_corr=selection.effective_selection_max_pairwise_corr,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -309,7 +324,7 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         competition=config.competition,
         metric_name=config.metric_name,
         candidate_ids=config.candidate_ids,
-        top_n=config.top_n,
+        top_n=None,
     )
     records = [_build_candidate_record(candidate, config=config) for candidate in pool.candidates]
     compatibility = evaluate_candidate_compatibility(
@@ -341,6 +356,7 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         rejected=rejected,
         strategy=config.selection.strategy,
         max_pairwise_corr=config.selection.max_pairwise_corr,
+        max_selected=_resolve_max_selected(config),
         metric_name=config.metric_name,
         target=config.target,
         min_gain=config.selection.min_gain,
@@ -348,18 +364,6 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
     accepted = list(selected.accepted)
     rejected = list(selected.rejected)
     hill_climb_trace = list(selected.hill_climb_trace)
-
-    if config.max_parents is not None and len(accepted) > config.max_parents:
-        overflow = accepted[config.max_parents :]
-        rejected.extend(
-            CandidateCompatibilityRejection(
-                experiment_id=candidate.experiment_id,
-                reason=f"trimmed by max_parents={config.max_parents}",
-            )
-            for candidate in overflow
-        )
-        accepted = accepted[: config.max_parents]
-        hill_climb_trace = hill_climb_trace[: len(accepted)]
 
     if len(accepted) < config.min_parents:
         raise ValueError(
@@ -371,6 +375,9 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         rejected=rejected,
         pairwise_correlations=selected.pairwise_correlations,
         hill_climb_trace=hill_climb_trace,
+        effective_top_n=_effective_top_n(config, len(accepted)),
+        effective_max_parents=_effective_max_parents(config, len(accepted)),
+        effective_selection_max_pairwise_corr=_effective_selection_max_pairwise_corr(config),
     )
 
 
@@ -414,8 +421,7 @@ def _build_candidate_record(
 def _missing_candidate_ids(config_candidate_ids: list[str], pool: CandidatePool) -> list[str]:
     if not config_candidate_ids:
         return []
-    seen = {candidate.experiment_id for candidate in pool.candidates}
-    seen.update(item.experiment_id for item in pool.rejected)
+    seen = set(pool.registry_candidate_ids)
     return [experiment_id for experiment_id in config_candidate_ids if experiment_id not in seen]
 
 
@@ -582,6 +588,9 @@ def _selection_report(
     pairwise_correlations: list[PairwiseCorrelation],
     hill_climb_trace: list[HillClimbStep],
     config: StackingPreflightConfig,
+    effective_top_n: int | None,
+    effective_max_parents: int | None,
+    effective_selection_max_pairwise_corr: float | None,
 ) -> str:
     accepted_lines = [
         "| experiment_id | model_family | oof_score | fold_count | cv_protocol_id |",
@@ -637,9 +646,13 @@ def _selection_report(
         f"- competition: `{config.competition}`\n"
         f"- metric_name: `{config.metric_name}`\n"
         f"- min_parents: `{config.min_parents}`\n"
-        f"- max_parents: `{config.max_parents}`\n"
+        f"- configured_top_n: `{config.top_n}`\n"
+        f"- effective_top_n: `{effective_top_n}`\n"
+        f"- configured_max_parents: `{config.max_parents}`\n"
+        f"- effective_max_parents: `{effective_max_parents}`\n"
         f"- selection_strategy: `{config.selection.strategy}`\n"
-        f"- selection_max_pairwise_corr: `{config.selection.max_pairwise_corr}`\n"
+        f"- configured_selection_max_pairwise_corr: `{config.selection.max_pairwise_corr}`\n"
+        f"- effective_selection_max_pairwise_corr: `{effective_selection_max_pairwise_corr}`\n"
         f"- selection_min_gain: `{config.selection.min_gain}`\n"
         f"- selection_report_top_k_pairs: `{config.selection.report_top_k_pairs}`\n"
         f"- stacker_method: `{config.stacker_method}`\n\n"
@@ -661,6 +674,9 @@ def _stacking_manifest(
     rejected: list[CandidateCompatibilityRejection],
     pairwise_correlations: list[PairwiseCorrelation],
     hill_climb_trace: list[HillClimbStep],
+    effective_top_n: int | None,
+    effective_max_parents: int | None,
+    effective_selection_max_pairwise_corr: float | None,
     stack_oof_path: Path,
     stack_test_path: Path,
     stack_oof: pd.DataFrame,
@@ -679,8 +695,13 @@ def _stacking_manifest(
         "metric_name": config.metric_name,
         "stacker_method": config.stacker_method,
         "stacker_params": config.stacker_params,
+        "configured_top_n": config.top_n,
+        "effective_top_n": effective_top_n,
+        "configured_max_parents": config.max_parents,
+        "effective_max_parents": effective_max_parents,
         "selection_strategy": config.selection.strategy,
-        "selection_max_pairwise_corr": config.selection.max_pairwise_corr,
+        "configured_selection_max_pairwise_corr": config.selection.max_pairwise_corr,
+        "selection_max_pairwise_corr": effective_selection_max_pairwise_corr,
         "selection_min_gain": config.selection.min_gain,
         "selection_report_top_k_pairs": config.selection.report_top_k_pairs,
         "accepted_candidate_ids": [candidate.experiment_id for candidate in accepted],
@@ -789,3 +810,29 @@ def _string_or_default(value: object, default: str) -> str:
 def _sigmoid(values: np.ndarray) -> np.ndarray:
     clipped = np.clip(values, -50.0, 50.0)
     return 1.0 / (1.0 + np.exp(-clipped))
+
+
+def _resolve_max_selected(config: StackingPreflightConfig) -> int | None:
+    limits = [value for value in (config.top_n, config.max_parents) if value is not None]
+    if not limits:
+        return None
+    return min(limits)
+
+
+def _effective_top_n(config: StackingPreflightConfig, accepted_count: int) -> int | None:
+    if config.top_n is None:
+        return None
+    return min(config.top_n, accepted_count)
+
+
+def _effective_max_parents(config: StackingPreflightConfig, accepted_count: int) -> int | None:
+    if config.max_parents is None:
+        return None
+    return min(config.max_parents, accepted_count)
+
+
+def _effective_selection_max_pairwise_corr(config: StackingPreflightConfig) -> float | None:
+    strategy_key = config.selection.strategy.strip().lower()
+    if strategy_key != "diversity_greedy":
+        return None
+    return config.selection.max_pairwise_corr

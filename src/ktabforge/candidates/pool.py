@@ -30,6 +30,7 @@ class RejectedCandidate:
 class CandidatePool:
     candidates: list[Candidate]
     rejected: list[RejectedCandidate]
+    registry_candidate_ids: list[str]
 
     def to_frame(self) -> pd.DataFrame:
         return pd.DataFrame([candidate.row for candidate in self.candidates])
@@ -46,15 +47,17 @@ def build_candidate_pool(
     root = Path(artifact_root)
     registry_path = root / "registry" / competition / "experiment_registry.csv"
     if not registry_path.exists():
-        return CandidatePool(candidates=[], rejected=[])
+        return CandidatePool(candidates=[], rejected=[], registry_candidate_ids=[])
 
     registry = pd.read_csv(registry_path)
     allowed_ids = set(candidate_ids or [])
     candidates: list[Candidate] = []
     rejected: list[RejectedCandidate] = []
+    registry_candidate_ids: list[str] = []
 
     for row in registry.to_dict(orient="records"):
         experiment_id = str(row.get("experiment_id", ""))
+        registry_candidate_ids.append(experiment_id)
         if allowed_ids and experiment_id not in allowed_ids:
             continue
 
@@ -96,9 +99,13 @@ def build_candidate_pool(
             ),
             reverse=True,
         )
-    if top_n is not None:
+    if top_n is not None and not allowed_ids:
         candidates = candidates[:top_n]
-    return CandidatePool(candidates=candidates, rejected=rejected)
+    return CandidatePool(
+        candidates=candidates,
+        rejected=rejected,
+        registry_candidate_ids=registry_candidate_ids,
+    )
 
 
 def _rejection_reason(

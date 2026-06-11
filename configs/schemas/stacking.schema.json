@@ -49,18 +49,22 @@
               "minimum": 1
             }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         },
         "stacker": {
           "type": "object",
+          "required": ["method"],
           "properties": {
-            "method": { "type": "string", "minLength": 1 },
+            "method": {
+              "type": "string",
+              "enum": ["preflight_only", "logistic_regression", "ridge_classifier"]
+            },
             "params": { "type": "object" }
           },
-          "additionalProperties": true
+          "additionalProperties": false
         }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     }
   },
   "additionalProperties": true

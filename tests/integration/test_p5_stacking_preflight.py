@@ -528,7 +528,141 @@ def test_cli_stack_preflight_hill_climb_selection_reports_trace(tmp_path):
     ]
 
 
-def test_cli_stack_preflight_hill_climb_trace_matches_trimmed_max_parents(tmp_path):
+def test_cli_stack_preflight_top_n_is_applied_after_compatibility_and_selection(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    target_values = [0, 1, 0, 1, 0, 1]
+    oof_ids = [1, 2, 3, 4, 5, 6]
+    folds = [0, 0, 1, 1, 2, 2]
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.10, 0.90, 0.20, 0.80, 0.15, 0.85],
+            test_predictions=[0.20, 0.80],
+            model_family="lightgbm",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.11, 0.89, 0.21, 0.79, 0.14, 0.86],
+            test_predictions=[0.21, 0.79],
+            model_family="xgboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-c",
+            oof_predictions=[0.30, 0.78, 0.25, 0.72, 0.45, 0.88],
+            test_predictions=[0.35, 0.75],
+            model_family="catboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_diversity_top_n.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-diversity-top-n",
+        candidate_ids=["candidate-a", "candidate-b", "candidate-c"],
+        top_n=2,
+        max_parents=2,
+        min_parents=2,
+        selection={
+            "strategy": "diversity_greedy",
+            "max_pairwise_corr": 0.995,
+            "report_top_k_pairs": 5,
+        },
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 0, result.stdout
+    stack_oof_path = (
+        artifact_root / "oof" / competition / "p05-stack-diversity-top-n" / "stack_oof.parquet"
+    )
+    manifest_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-diversity-top-n"
+        / "stacking_manifest.json"
+    )
+    stack_oof = pd.read_parquet(stack_oof_path)
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    assert stack_oof.columns.tolist() == ["id", "Churn", "fold", "candidate-a", "candidate-c"]
+    assert manifest["accepted_candidate_ids"] == ["candidate-a", "candidate-c"]
+    rejected_by_id = {
+        item["experiment_id"]: item["reason"] for item in manifest["rejected_candidates"]
+    }
+    assert "candidate-b" in rejected_by_id
+    assert "max_pairwise_corr" in rejected_by_id["candidate-b"]
+
+
+def test_cli_stack_preflight_does_not_mark_top_n_trimmed_candidate_as_missing_from_registry(
+    tmp_path,
+):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.1, 0.8, 0.3, 0.9],
+            test_predictions=[0.2, 0.7],
+            model_family="lightgbm",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.2, 0.7, 0.4, 0.8],
+            test_predictions=[0.3, 0.6],
+            model_family="xgboost",
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_top_n_explicit_ids.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-top-n-explicit-ids",
+        candidate_ids=["candidate-a", "candidate-b"],
+        top_n=1,
+        max_parents=1,
+        min_parents=1,
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 0, result.stdout
+    manifest_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-top-n-explicit-ids"
+        / "stacking_manifest.json"
+    )
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    rejected_reasons = [item["reason"] for item in manifest["rejected_candidates"]]
+    assert all("not found in registry" not in reason for reason in rejected_reasons)
+
+
+def test_cli_stack_preflight_hill_climb_respects_max_parents_without_post_trim(tmp_path):
     artifact_root = tmp_path / "artifacts"
     competition = "churn_tiny"
     target_values = [0, 0, 0, 1, 1, 1]
@@ -609,3 +743,66 @@ def test_cli_stack_preflight_hill_climb_trace_matches_trimmed_max_parents(tmp_pa
     assert stack_oof.columns.tolist() == ["id", "Churn", "fold", "candidate-a"]
     assert manifest["accepted_candidate_ids"] == ["candidate-a"]
     assert [step["experiment_id"] for step in manifest["hill_climb_trace"]] == ["candidate-a"]
+    rejected_by_id = {
+        item["experiment_id"]: item["reason"] for item in manifest["rejected_candidates"]
+    }
+    assert all("trimmed by max_parents" not in reason for reason in rejected_by_id.values())
+
+
+def test_cli_stack_preflight_rejects_hill_climb_with_max_pairwise_corr_in_reporting(
+    tmp_path,
+):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    target_values = [0, 0, 0, 1, 1, 1]
+    oof_ids = [1, 2, 3, 4, 5, 6]
+    folds = [0, 0, 1, 1, 2, 2]
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.3875, 0.1827, 0.1269, 0.7535, 0.6218, 0.8165],
+            test_predictions=[0.30, 0.75],
+            model_family="lightgbm",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.3976, 0.2670, 0.3975, 0.8758, 0.8026, 0.8676],
+            test_predictions=[0.35, 0.82],
+            model_family="xgboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_hill_climb_with_corr.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-hill-climb-with-corr",
+        metric_name="log_loss",
+        candidate_ids=["candidate-a", "candidate-b"],
+        min_parents=1,
+        max_parents=2,
+        selection={
+            "strategy": "hill_climb_greedy",
+            "min_gain": 0.0,
+            "max_pairwise_corr": 0.99,
+            "report_top_k_pairs": 5,
+        },
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 1
+    assert "max_pairwise_corr" in result.stdout
+    assert "hill_climb_greedy" in result.stdout

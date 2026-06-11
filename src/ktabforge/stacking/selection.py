@@ -41,6 +41,7 @@ def apply_selection_policy(
     rejected: list[CandidateCompatibilityRejection],
     strategy: str,
     max_pairwise_corr: float | None,
+    max_selected: int | None = None,
     metric_name: str | None = None,
     target: str | None = None,
     min_gain: float = 0.0,
@@ -50,10 +51,15 @@ def apply_selection_policy(
     strategy_key = strategy.strip().lower()
     resolved_metric_name = metric_name or _infer_metric_name(candidates)
     ranked_candidates = _sort_candidates_by_score(candidates, resolved_metric_name)
+    _validate_selection_constraints(
+        strategy_key=strategy_key,
+        max_pairwise_corr=max_pairwise_corr,
+        max_selected=max_selected,
+    )
 
     if strategy_key == "score_desc":
         return SelectionPolicyResult(
-            accepted=ranked_candidates,
+            accepted=_limit_selected(ranked_candidates, max_selected),
             rejected=kept_rejections,
             pairwise_correlations=pairwise_correlations,
             hill_climb_trace=[],
@@ -68,6 +74,7 @@ def apply_selection_policy(
             ranked_candidates,
             rejected=kept_rejections,
             pairwise_correlations=pairwise_correlations,
+            max_selected=max_selected,
             metric_name=resolved_metric_name,
             target=target,
             min_gain=min_gain,
@@ -79,20 +86,14 @@ def apply_selection_policy(
             "Known strategies: score_desc, diversity_greedy, hill_climb_greedy."
         )
 
-    if max_pairwise_corr is None:
-        raise ValueError(
-            "selection.max_pairwise_corr is required when "
-            "selection.strategy=diversity_greedy"
-        )
-    if max_pairwise_corr < 0 or max_pairwise_corr > 1:
-        raise ValueError("selection.max_pairwise_corr must be within [0, 1]")
-
     correlation_lookup = {
         frozenset((pair.left_experiment_id, pair.right_experiment_id)): pair
         for pair in pairwise_correlations
     }
     accepted: list[CandidateRecord] = []
     for candidate in ranked_candidates:
+        if max_selected is not None and len(accepted) >= max_selected:
+            break
         blocker = _first_blocking_parent(
             candidate,
             accepted=accepted,
@@ -176,6 +177,7 @@ def _apply_hill_climb_greedy(
     *,
     rejected: list[CandidateCompatibilityRejection],
     pairwise_correlations: list[PairwiseCorrelation],
+    max_selected: int | None,
     metric_name: str,
     target: str,
     min_gain: float,
@@ -186,7 +188,7 @@ def _apply_hill_climb_greedy(
     current_predictions: pd.Series | None = None
     current_score: float | None = None
 
-    while remaining:
+    while remaining and (max_selected is None or len(accepted) < max_selected):
         best = _best_hill_climb_candidate(
             remaining,
             accepted=accepted,
@@ -319,3 +321,36 @@ def _sort_candidates_by_score(
         ),
         reverse=higher_is_better,
     )
+
+
+def _limit_selected(
+    candidates: list[CandidateRecord],
+    max_selected: int | None,
+) -> list[CandidateRecord]:
+    if max_selected is None:
+        return list(candidates)
+    return list(candidates[:max_selected])
+
+
+def _validate_selection_constraints(
+    *,
+    strategy_key: str,
+    max_pairwise_corr: float | None,
+    max_selected: int | None,
+) -> None:
+    if max_selected is not None and max_selected <= 0:
+        raise ValueError("selection max_selected must be greater than 0 when provided")
+    if strategy_key == "diversity_greedy":
+        if max_pairwise_corr is None:
+            raise ValueError(
+                "selection.max_pairwise_corr is required when "
+                "selection.strategy=diversity_greedy"
+            )
+        if max_pairwise_corr < 0 or max_pairwise_corr > 1:
+            raise ValueError("selection.max_pairwise_corr must be within [0, 1]")
+        return
+    if max_pairwise_corr is not None:
+        raise ValueError(
+            "selection.max_pairwise_corr is only supported when "
+            "selection.strategy=diversity_greedy"
+        )
