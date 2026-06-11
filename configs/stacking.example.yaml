@@ -3,7 +3,7 @@
 # It does not train a stacker or write a completed registry row.
 #
 # Run:
-# uv run ktab stack-preflight --config configs\stacking.example.yaml
+# uv run ktab stack --config configs\stacking.example.yaml
 
 stacking:
   experiment_id: p05-stack-preflight-example
@@ -18,3 +18,8 @@ stacking:
   top_n: 10
   max_parents: 2
   min_parents: 2
+  stacker:
+    method: logistic_regression
+    params:
+      C: 1.0
+      max_iter: 200

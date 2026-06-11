@@ -164,3 +164,34 @@ def stack_preflight(config: ConfigOption) -> None:
         f"{result.status} accepted: {result.accepted_count} rejected: "
         f"{result.rejected_count} report: {result.selection_report_path}"
     )
+
+
+@app.command("stack")
+def stack(config: ConfigOption) -> None:
+    """Run stack config through the available stacking entrypoint."""
+    from ktabforge.stacking import runner as stacking_runner
+
+    runner = getattr(stacking_runner, "run_stack_from_config", None)
+    if runner is None:
+        runner = getattr(stacking_runner, "run_stacking_from_config", None)
+    if runner is None:
+        typer.echo("No completed stacking runner is available")
+        raise typer.Exit(code=1)
+
+    try:
+        result = runner(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = getattr(result, "status", None) or "completed"
+    accepted_count = getattr(result, "accepted_count", None)
+    rejected_count = getattr(result, "rejected_count", None)
+    report_path = getattr(result, "selection_report_path", None)
+    if accepted_count is not None and rejected_count is not None and report_path is not None:
+        typer.echo(
+            f"{status} accepted: {accepted_count} rejected: "
+            f"{rejected_count} report: {report_path}"
+        )
+        return
+    typer.echo(str(status))

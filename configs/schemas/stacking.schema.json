@@ -27,7 +27,15 @@
         },
         "top_n": { "type": ["integer", "null"], "minimum": 1 },
         "max_parents": { "type": ["integer", "null"], "minimum": 1 },
-        "min_parents": { "type": ["integer", "null"], "minimum": 1 }
+        "min_parents": { "type": ["integer", "null"], "minimum": 1 },
+        "stacker": {
+          "type": "object",
+          "properties": {
+            "method": { "type": "string", "minLength": 1 },
+            "params": { "type": "object" }
+          },
+          "additionalProperties": true
+        }
       },
       "additionalProperties": true
     }

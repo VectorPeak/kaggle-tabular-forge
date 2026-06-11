@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from ktabforge.config.loader import load_yaml_file
 from ktabforge.config.safety import safe_path_segment
@@ -20,6 +21,8 @@ class StackingPreflightConfig:
     top_n: int | None
     max_parents: int | None
     min_parents: int
+    stacker_method: str
+    stacker_params: dict[str, Any]
     config_path: Path
     raw: dict[str, object]
 
@@ -34,6 +37,9 @@ def load_stacking_config(config_path: str | Path) -> StackingPreflightConfig:
     stacking = payload.get("stacking", {})
     if not isinstance(stacking, dict):
         raise TypeError("Stacking config section 'stacking' must be a mapping.")
+    stacker = stacking.get("stacker", {})
+    if not isinstance(stacker, dict):
+        raise TypeError("Stacking config section 'stacker' must be a mapping when provided.")
 
     min_parents = _optional_int(stacking.get("min_parents"))
     return StackingPreflightConfig(
@@ -53,6 +59,8 @@ def load_stacking_config(config_path: str | Path) -> StackingPreflightConfig:
         top_n=_optional_int(stacking.get("top_n")),
         max_parents=_optional_int(stacking.get("max_parents")),
         min_parents=min_parents if min_parents is not None else 2,
+        stacker_method=str(stacker.get("method") or "preflight_only"),
+        stacker_params=dict(stacker.get("params") or {}),
         config_path=path,
         raw=payload,
     )
