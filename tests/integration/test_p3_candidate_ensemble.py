@@ -154,6 +154,43 @@ def test_candidate_pool_filters_completed_candidates_with_prediction_paths(tmp_p
     assert "oof_path does not exist" in rejected_by_id["candidate-missing"]
 
 
+def test_candidate_pool_sorts_min_metric_ascending(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    better = _write_candidate(
+        artifact_root=artifact_root,
+        competition=competition,
+        experiment_id="candidate-better",
+        oof_predictions=[0.2, 0.3, 0.25, 0.7],
+        test_predictions=[0.3, 0.7],
+        score=0.21,
+    )
+    worse = _write_candidate(
+        artifact_root=artifact_root,
+        competition=competition,
+        experiment_id="candidate-worse",
+        oof_predictions=[0.1, 0.4, 0.2, 0.8],
+        test_predictions=[0.25, 0.75],
+        score=0.35,
+    )
+    better["metric_name"] = "log_loss"
+    better["metric_mode"] = "min"
+    worse["metric_name"] = "log_loss"
+    worse["metric_mode"] = "min"
+    _write_registry(artifact_root, competition, [worse, better])
+
+    pool = build_candidate_pool(
+        artifact_root=artifact_root,
+        competition=competition,
+        metric_name="log_loss",
+    )
+
+    assert [candidate.experiment_id for candidate in pool.candidates] == [
+        "candidate-better",
+        "candidate-worse",
+    ]
+
+
 def test_ensemble_runner_blocks_misaligned_test_predictions(tmp_path):
     artifact_root = tmp_path / "artifacts"
     competition = "churn_tiny"

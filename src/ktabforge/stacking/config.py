@@ -14,6 +14,7 @@ class StackingSelectionConfig:
     strategy: str
     max_pairwise_corr: float | None
     report_top_k_pairs: int
+    min_gain: float
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,7 @@ def load_stacking_config(config_path: str | Path) -> StackingPreflightConfig:
             strategy=str(selection.get("strategy") or "score_desc"),
             max_pairwise_corr=_optional_probability(selection.get("max_pairwise_corr")),
             report_top_k_pairs=_optional_int(selection.get("report_top_k_pairs")) or 20,
+            min_gain=_optional_non_negative_float(selection.get("min_gain")) or 0.0,
         ),
         stacker_method=str(stacker.get("method") or "preflight_only"),
         stacker_params=dict(stacker.get("params") or {}),
@@ -104,4 +106,13 @@ def _optional_probability(value: object) -> float | None:
     parsed = float(value)
     if parsed < 0 or parsed > 1:
         raise ValueError("Stacking probability options must be within [0, 1] when set.")
+    return parsed
+
+
+def _optional_non_negative_float(value: object) -> float | None:
+    if value is None or str(value) == "":
+        return None
+    parsed = float(value)
+    if parsed < 0:
+        raise ValueError("Stacking float options must be greater than or equal to 0 when set.")
     return parsed

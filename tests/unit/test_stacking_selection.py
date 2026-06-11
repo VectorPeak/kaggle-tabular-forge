@@ -14,13 +14,16 @@ def _candidate(
     *,
     score: float,
     predictions: list[float],
+    metric_name: str = "roc_auc",
+    target_values: list[int] | None = None,
 ) -> CandidateRecord:
     target = "Churn"
     id_column = "id"
+    target_values = target_values or [0, 1, 0, 1, 0, 1]
     oof = pd.DataFrame(
         {
             id_column: [1, 2, 3, 4, 5, 6],
-            target: [0, 1, 0, 1, 0, 1],
+            target: target_values,
             "prediction": predictions,
             "fold": [0, 0, 1, 1, 2, 2],
         }
@@ -38,7 +41,7 @@ def _candidate(
         row={},
         prediction_meta=PredictionArtifactMeta(
             competition="churn_tiny",
-            metric_name="roc_auc",
+            metric_name=metric_name,
             prediction_type="probability",
             target=target,
             id_column=id_column,
@@ -122,3 +125,52 @@ def test_apply_selection_policy_score_desc_preserves_candidates_and_correlation_
     ]
     assert result.rejected == prior_rejections
     assert len(result.pairwise_correlations) == 1
+
+
+def test_apply_selection_policy_hill_climb_greedy_keeps_improving_candidates_only():
+    candidates = [
+        _candidate(
+            "candidate-a",
+            score=0.298085,
+            predictions=[0.3875, 0.1827, 0.1269, 0.7535, 0.6218, 0.8165],
+            metric_name="log_loss",
+            target_values=[0, 0, 0, 1, 1, 1],
+        ),
+        _candidate(
+            "candidate-b",
+            score=0.30307,
+            predictions=[0.3976, 0.2670, 0.3975, 0.8758, 0.8026, 0.8676],
+            metric_name="log_loss",
+            target_values=[0, 0, 0, 1, 1, 1],
+        ),
+        _candidate(
+            "candidate-c",
+            score=0.5017,
+            predictions=[0.4453, 0.2794, 0.6253, 0.7271, 0.7707, 0.5872],
+            metric_name="log_loss",
+            target_values=[0, 0, 0, 1, 1, 1],
+        ),
+    ]
+
+    result = apply_selection_policy(
+        candidates,
+        rejected=[],
+        strategy="hill_climb_greedy",
+        max_pairwise_corr=None,
+        metric_name="log_loss",
+        target="Churn",
+        min_gain=0.0,
+    )
+
+    assert [candidate.experiment_id for candidate in result.accepted] == [
+        "candidate-a",
+        "candidate-b",
+    ]
+    assert [step.experiment_id for step in result.hill_climb_trace] == [
+        "candidate-a",
+        "candidate-b",
+    ]
+    assert result.hill_climb_trace[1].ensemble_score < result.hill_climb_trace[0].ensemble_score
+    rejected_by_id = {item.experiment_id: item.reason for item in result.rejected}
+    assert "candidate-c" in rejected_by_id
+    assert "min_gain" in rejected_by_id["candidate-c"]

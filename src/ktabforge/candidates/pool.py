@@ -6,6 +6,8 @@ from typing import Any
 
 import pandas as pd
 
+from ktabforge.metrics.scoring import metric_higher_is_better
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -75,13 +77,25 @@ def build_candidate_pool(
             )
         )
 
-    candidates.sort(
-        key=lambda candidate: (
-            candidate.oof_score is not None,
-            candidate.oof_score if candidate.oof_score is not None else float("-inf"),
-        ),
-        reverse=True,
-    )
+    if metric_name:
+        higher_is_better = metric_higher_is_better(metric_name)
+        missing_default = float("-inf") if higher_is_better else float("inf")
+        candidates.sort(
+            key=lambda candidate: (
+                candidate.oof_score
+                if candidate.oof_score is not None
+                else missing_default
+            ),
+            reverse=higher_is_better,
+        )
+    else:
+        candidates.sort(
+            key=lambda candidate: (
+                candidate.oof_score is not None,
+                candidate.oof_score if candidate.oof_score is not None else float("-inf"),
+            ),
+            reverse=True,
+        )
     if top_n is not None:
         candidates = candidates[:top_n]
     return CandidatePool(candidates=candidates, rejected=rejected)

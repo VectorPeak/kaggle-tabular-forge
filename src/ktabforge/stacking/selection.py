@@ -5,6 +5,9 @@ from dataclasses import dataclass
 import pandas as pd
 
 from ktabforge.candidates import CandidateCompatibilityRejection, CandidateRecord
+from ktabforge.metrics.scoring import metric_higher_is_better, score_predictions
+
+_EPSILON = 1e-12
 
 
 @dataclass(frozen=True)
@@ -16,10 +19,20 @@ class PairwiseCorrelation:
 
 
 @dataclass(frozen=True)
+class HillClimbStep:
+    step: int
+    experiment_id: str
+    ensemble_score: float
+    marginal_gain: float | None
+    selected_experiment_ids: list[str]
+
+
+@dataclass(frozen=True)
 class SelectionPolicyResult:
     accepted: list[CandidateRecord]
     rejected: list[CandidateCompatibilityRejection]
     pairwise_correlations: list[PairwiseCorrelation]
+    hill_climb_trace: list[HillClimbStep]
 
 
 def apply_selection_policy(
@@ -28,23 +41,42 @@ def apply_selection_policy(
     rejected: list[CandidateCompatibilityRejection],
     strategy: str,
     max_pairwise_corr: float | None,
+    metric_name: str | None = None,
+    target: str | None = None,
+    min_gain: float = 0.0,
 ) -> SelectionPolicyResult:
     pairwise_correlations = compute_pairwise_correlations(candidates)
     kept_rejections = list(rejected)
     strategy_key = strategy.strip().lower()
-    ranked_candidates = _sort_candidates_by_score(candidates)
+    resolved_metric_name = metric_name or _infer_metric_name(candidates)
+    ranked_candidates = _sort_candidates_by_score(candidates, resolved_metric_name)
 
     if strategy_key == "score_desc":
         return SelectionPolicyResult(
             accepted=ranked_candidates,
             rejected=kept_rejections,
             pairwise_correlations=pairwise_correlations,
+            hill_climb_trace=[],
+        )
+
+    if strategy_key == "hill_climb_greedy":
+        if target is None:
+            raise ValueError("target is required when selection.strategy=hill_climb_greedy")
+        if min_gain < 0:
+            raise ValueError("selection.min_gain must be greater than or equal to 0")
+        return _apply_hill_climb_greedy(
+            ranked_candidates,
+            rejected=kept_rejections,
+            pairwise_correlations=pairwise_correlations,
+            metric_name=resolved_metric_name,
+            target=target,
+            min_gain=min_gain,
         )
 
     if strategy_key != "diversity_greedy":
         raise ValueError(
             f"Unsupported selection.strategy {strategy!r}. "
-            "Known strategies: score_desc, diversity_greedy."
+            "Known strategies: score_desc, diversity_greedy, hill_climb_greedy."
         )
 
     if max_pairwise_corr is None:
@@ -86,6 +118,7 @@ def apply_selection_policy(
         accepted=accepted,
         rejected=kept_rejections,
         pairwise_correlations=pairwise_correlations,
+        hill_climb_trace=[],
     )
 
 
@@ -138,12 +171,151 @@ def _pearson_corr(left: pd.Series, right: pd.Series) -> float:
     return float(corr)
 
 
-def _sort_candidates_by_score(candidates: list[CandidateRecord]) -> list[CandidateRecord]:
+def _apply_hill_climb_greedy(
+    candidates: list[CandidateRecord],
+    *,
+    rejected: list[CandidateCompatibilityRejection],
+    pairwise_correlations: list[PairwiseCorrelation],
+    metric_name: str,
+    target: str,
+    min_gain: float,
+) -> SelectionPolicyResult:
+    accepted: list[CandidateRecord] = []
+    trace: list[HillClimbStep] = []
+    remaining = list(candidates)
+    current_predictions: pd.Series | None = None
+    current_score: float | None = None
+
+    while remaining:
+        best = _best_hill_climb_candidate(
+            remaining,
+            accepted=accepted,
+            current_predictions=current_predictions,
+            metric_name=metric_name,
+            target=target,
+        )
+        candidate, ensemble_predictions, next_score = best
+        marginal_gain = None
+        if current_score is not None:
+            marginal_gain = _improvement_amount(metric_name, current_score, next_score)
+
+        if current_score is not None and (
+            marginal_gain is None or marginal_gain <= min_gain + _EPSILON
+        ):
+            for item in remaining:
+                item_score = _candidate_hill_climb_score(
+                    item,
+                    accepted=accepted,
+                    current_predictions=current_predictions,
+                    target=target,
+                    metric_name=metric_name,
+                )
+                item_gain = _improvement_amount(metric_name, current_score, item_score)
+                rejected.append(
+                    CandidateCompatibilityRejection(
+                        experiment_id=item.experiment_id,
+                        reason=(
+                            "hill_climb_greedy stopped because marginal gain "
+                            f"{item_gain:.6f} did not exceed min_gain={min_gain}"
+                        ),
+                    )
+                )
+            break
+
+        accepted.append(candidate)
+        current_predictions = ensemble_predictions
+        current_score = next_score
+        trace.append(
+            HillClimbStep(
+                step=len(trace) + 1,
+                experiment_id=candidate.experiment_id,
+                ensemble_score=next_score,
+                marginal_gain=marginal_gain,
+                selected_experiment_ids=[item.experiment_id for item in accepted],
+            )
+        )
+        remaining = [
+            item for item in remaining if item.experiment_id != candidate.experiment_id
+        ]
+
+    return SelectionPolicyResult(
+        accepted=accepted,
+        rejected=rejected,
+        pairwise_correlations=pairwise_correlations,
+        hill_climb_trace=trace,
+    )
+
+
+def _best_hill_climb_candidate(
+    candidates: list[CandidateRecord],
+    *,
+    accepted: list[CandidateRecord],
+    current_predictions: pd.Series | None,
+    metric_name: str,
+    target: str,
+) -> tuple[CandidateRecord, pd.Series, float]:
+    evaluations: list[tuple[CandidateRecord, pd.Series, float]] = []
+    for candidate in candidates:
+        candidate_predictions = candidate.oof["prediction"].reset_index(drop=True).astype(float)
+        if current_predictions is None:
+            ensemble_predictions = candidate_predictions
+        else:
+            ensemble_predictions = (
+                current_predictions * len(accepted) + candidate_predictions
+            ) / (len(accepted) + 1)
+        score = float(
+            score_predictions(metric_name, candidate.oof[target], ensemble_predictions)
+        )
+        evaluations.append((candidate, ensemble_predictions, score))
+
+    higher_is_better = metric_higher_is_better(metric_name)
+    if higher_is_better:
+        return max(evaluations, key=lambda item: item[2])
+    return min(evaluations, key=lambda item: item[2])
+
+
+def _candidate_hill_climb_score(
+    candidate: CandidateRecord,
+    *,
+    accepted: list[CandidateRecord],
+    current_predictions: pd.Series | None,
+    target: str,
+    metric_name: str,
+) -> float:
+    candidate_predictions = candidate.oof["prediction"].reset_index(drop=True).astype(float)
+    if current_predictions is None:
+        ensemble_predictions = candidate_predictions
+    else:
+        ensemble_predictions = (
+            current_predictions * len(accepted) + candidate_predictions
+        ) / (len(accepted) + 1)
+    return float(score_predictions(metric_name, candidate.oof[target], ensemble_predictions))
+
+
+def _improvement_amount(metric_name: str, previous_score: float, next_score: float) -> float:
+    if metric_higher_is_better(metric_name):
+        return next_score - previous_score
+    return previous_score - next_score
+
+
+def _infer_metric_name(candidates: list[CandidateRecord]) -> str:
+    if not candidates:
+        raise ValueError("candidate pool is empty")
+    return candidates[0].prediction_meta.metric_name
+
+
+def _sort_candidates_by_score(
+    candidates: list[CandidateRecord],
+    metric_name: str,
+) -> list[CandidateRecord]:
+    higher_is_better = metric_higher_is_better(metric_name)
+    missing_default = float("-inf") if higher_is_better else float("inf")
     return sorted(
         candidates,
         key=lambda candidate: (
-            candidate.oof_score is not None,
-            candidate.oof_score if candidate.oof_score is not None else float("-inf"),
+            candidate.oof_score
+            if candidate.oof_score is not None
+            else missing_default
         ),
-        reverse=True,
+        reverse=higher_is_better,
     )

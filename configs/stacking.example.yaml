@@ -21,6 +21,7 @@ stacking:
   selection:
     strategy: score_desc
     max_pairwise_corr: 0.995
+    min_gain: 0.0
     report_top_k_pairs: 10
   stacker:
     method: logistic_regression

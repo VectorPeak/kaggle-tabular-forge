@@ -24,7 +24,11 @@ from ktabforge.metrics.scoring import metric_mode, score_predictions
 from ktabforge.registry.experiments import append_experiment_registry
 from ktabforge.safety.gates import evaluate_artifact_safety
 from ktabforge.stacking.config import StackingPreflightConfig, load_stacking_config
-from ktabforge.stacking.selection import PairwiseCorrelation, apply_selection_policy
+from ktabforge.stacking.selection import (
+    HillClimbStep,
+    PairwiseCorrelation,
+    apply_selection_policy,
+)
 from ktabforge.utils.hashing import stable_hash
 
 
@@ -60,6 +64,7 @@ class _SelectedCandidates:
     accepted: list[CandidateRecord]
     rejected: list[CandidateCompatibilityRejection]
     pairwise_correlations: list[PairwiseCorrelation]
+    hill_climb_trace: list[HillClimbStep]
 
 
 @dataclass(frozen=True)
@@ -109,6 +114,7 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
             accepted=selection.accepted,
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
+            hill_climb_trace=selection.hill_climb_trace,
             config=config,
         ),
     )
@@ -119,6 +125,7 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
             accepted=selection.accepted,
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
+            hill_climb_trace=selection.hill_climb_trace,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -195,6 +202,7 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
             accepted=selection.accepted,
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
+            hill_climb_trace=selection.hill_climb_trace,
             config=config,
         ),
     )
@@ -205,6 +213,7 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
             accepted=selection.accepted,
             rejected=selection.rejected,
             pairwise_correlations=selection.pairwise_correlations,
+            hill_climb_trace=selection.hill_climb_trace,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -332,9 +341,13 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         rejected=rejected,
         strategy=config.selection.strategy,
         max_pairwise_corr=config.selection.max_pairwise_corr,
+        metric_name=config.metric_name,
+        target=config.target,
+        min_gain=config.selection.min_gain,
     )
     accepted = list(selected.accepted)
     rejected = list(selected.rejected)
+    hill_climb_trace = list(selected.hill_climb_trace)
 
     if config.max_parents is not None and len(accepted) > config.max_parents:
         overflow = accepted[config.max_parents :]
@@ -346,6 +359,7 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
             for candidate in overflow
         )
         accepted = accepted[: config.max_parents]
+        hill_climb_trace = hill_climb_trace[: len(accepted)]
 
     if len(accepted) < config.min_parents:
         raise ValueError(
@@ -356,6 +370,7 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         accepted=accepted,
         rejected=rejected,
         pairwise_correlations=selected.pairwise_correlations,
+        hill_climb_trace=hill_climb_trace,
     )
 
 
@@ -565,6 +580,7 @@ def _selection_report(
     accepted: list[CandidateRecord],
     rejected: list[CandidateCompatibilityRejection],
     pairwise_correlations: list[PairwiseCorrelation],
+    hill_climb_trace: list[HillClimbStep],
     config: StackingPreflightConfig,
 ) -> str:
     accepted_lines = [
@@ -604,6 +620,17 @@ def _selection_report(
             f"{item.correlation:.6f} | {item.abs_correlation:.6f} |"
         )
 
+    trace_lines = [
+        "| step | experiment_id | ensemble_score | marginal_gain | selected_experiment_ids |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for item in hill_climb_trace:
+        marginal_gain = "" if item.marginal_gain is None else f"{item.marginal_gain:.6f}"
+        trace_lines.append(
+            f"| {item.step} | {item.experiment_id} | {item.ensemble_score:.6f} | "
+            f"{marginal_gain} | {', '.join(item.selected_experiment_ids)} |"
+        )
+
     return (
         "# Stacking Preflight Selection Report\n\n"
         f"- experiment_id: `{config.experiment_id}`\n"
@@ -613,6 +640,7 @@ def _selection_report(
         f"- max_parents: `{config.max_parents}`\n"
         f"- selection_strategy: `{config.selection.strategy}`\n"
         f"- selection_max_pairwise_corr: `{config.selection.max_pairwise_corr}`\n"
+        f"- selection_min_gain: `{config.selection.min_gain}`\n"
         f"- selection_report_top_k_pairs: `{config.selection.report_top_k_pairs}`\n"
         f"- stacker_method: `{config.stacker_method}`\n\n"
         "## Accepted Candidates\n\n"
@@ -620,7 +648,9 @@ def _selection_report(
         "## Rejected Candidates\n\n"
         f"{chr(10).join(rejected_lines)}\n\n"
         "## Top Correlated Pairs\n\n"
-        f"{chr(10).join(pair_lines)}\n"
+        f"{chr(10).join(pair_lines)}\n\n"
+        "## Hill Climb Trace\n\n"
+        f"{chr(10).join(trace_lines)}\n"
     )
 
 
@@ -630,6 +660,7 @@ def _stacking_manifest(
     accepted: list[CandidateRecord],
     rejected: list[CandidateCompatibilityRejection],
     pairwise_correlations: list[PairwiseCorrelation],
+    hill_climb_trace: list[HillClimbStep],
     stack_oof_path: Path,
     stack_test_path: Path,
     stack_oof: pd.DataFrame,
@@ -650,6 +681,7 @@ def _stacking_manifest(
         "stacker_params": config.stacker_params,
         "selection_strategy": config.selection.strategy,
         "selection_max_pairwise_corr": config.selection.max_pairwise_corr,
+        "selection_min_gain": config.selection.min_gain,
         "selection_report_top_k_pairs": config.selection.report_top_k_pairs,
         "accepted_candidate_ids": [candidate.experiment_id for candidate in accepted],
         "rejected_candidates": [
@@ -664,6 +696,16 @@ def _stacking_manifest(
                 "abs_correlation": item.abs_correlation,
             }
             for item in pairwise_correlations[: config.selection.report_top_k_pairs]
+        ],
+        "hill_climb_trace": [
+            {
+                "step": item.step,
+                "experiment_id": item.experiment_id,
+                "ensemble_score": item.ensemble_score,
+                "marginal_gain": item.marginal_gain,
+                "selected_experiment_ids": item.selected_experiment_ids,
+            }
+            for item in hill_climb_trace
         ],
         "stack_oof_path": str(stack_oof_path),
         "stack_test_path": str(stack_test_path),

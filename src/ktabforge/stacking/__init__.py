@@ -12,6 +12,7 @@ from ktabforge.stacking.runner import (
     run_stacking_preflight,
 )
 from ktabforge.stacking.selection import (
+    HillClimbStep,
     PairwiseCorrelation,
     SelectionPolicyResult,
     apply_selection_policy,
@@ -19,6 +20,7 @@ from ktabforge.stacking.selection import (
 
 __all__ = [
     "apply_selection_policy",
+    "HillClimbStep",
     "PairwiseCorrelation",
     "SelectionPolicyResult",
     "StackRunResult",

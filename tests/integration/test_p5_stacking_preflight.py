@@ -21,6 +21,7 @@ def _write_candidate(
     target: str = "Churn",
     seed: int = 42,
     target_values: list[int] | None = None,
+    metric_name: str = "roc_auc",
 ) -> dict[str, object]:
     oof_ids = oof_ids or [1, 2, 3, 4]
     folds = folds or [0, 0, 1, 1]
@@ -41,8 +42,8 @@ def _write_candidate(
     return {
         "experiment_id": experiment_id,
         "competition": competition,
-        "metric_name": "roc_auc",
-        "metric_mode": "max",
+        "metric_name": metric_name,
+        "metric_mode": "min" if metric_name in {"log_loss", "rmse", "mae"} else "max",
         "oof_score": 0.75,
         "status": "completed",
         "oof_path": str(oof_path),
@@ -77,7 +78,11 @@ def _write_stacking_config(
     competition: str = "churn_tiny",
     target: str = "Churn",
     id_column: str = "id",
+    metric_name: str = "roc_auc",
     candidate_ids: list[str] | None = None,
+    top_n: int = 3,
+    max_parents: int = 2,
+    min_parents: int = 2,
     stacker_method: str = "logistic_regression",
     stacker_params: dict[str, object] | None = None,
     selection: dict[str, object] | None = None,
@@ -88,11 +93,11 @@ def _write_stacking_config(
         "artifact_root": str(artifact_root),
         "target": target,
         "id_column": id_column,
-        "metric_name": "roc_auc",
+        "metric_name": metric_name,
         "candidate_ids": candidate_ids or ["candidate-a", "candidate-b", "candidate-c"],
-        "top_n": 3,
-        "max_parents": 2,
-        "min_parents": 2,
+        "top_n": top_n,
+        "max_parents": max_parents,
+        "min_parents": min_parents,
         "stacker": {
             "method": stacker_method,
             "params": stacker_params or {"C": 1.0, "max_iter": 200},
@@ -425,3 +430,182 @@ def test_cli_stack_preflight_diversity_selection_filters_high_correlation_candid
     assert manifest["accepted_candidate_ids"] == ["candidate-a", "candidate-c"]
     assert manifest["selection_strategy"] == "diversity_greedy"
     assert manifest["selection_max_pairwise_corr"] == 0.995
+
+
+def test_cli_stack_preflight_hill_climb_selection_reports_trace(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    target_values = [0, 0, 0, 1, 1, 1]
+    oof_ids = [1, 2, 3, 4, 5, 6]
+    folds = [0, 0, 1, 1, 2, 2]
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.3875, 0.1827, 0.1269, 0.7535, 0.6218, 0.8165],
+            test_predictions=[0.30, 0.75],
+            model_family="lightgbm",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.3976, 0.2670, 0.3975, 0.8758, 0.8026, 0.8676],
+            test_predictions=[0.35, 0.82],
+            model_family="xgboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-c",
+            oof_predictions=[0.4453, 0.2794, 0.6253, 0.7271, 0.7707, 0.5872],
+            test_predictions=[0.40, 0.70],
+            model_family="catboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_hill_climb.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-hill-climb",
+        metric_name="log_loss",
+        candidate_ids=["candidate-a", "candidate-b", "candidate-c"],
+        selection={
+            "strategy": "hill_climb_greedy",
+            "min_gain": 0.0,
+            "report_top_k_pairs": 5,
+        },
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 0, result.stdout
+    stack_oof_path = (
+        artifact_root / "oof" / competition / "p05-stack-hill-climb" / "stack_oof.parquet"
+    )
+    report_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-hill-climb"
+        / "selection_report.md"
+    )
+    manifest_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-hill-climb"
+        / "stacking_manifest.json"
+    )
+
+    stack_oof = pd.read_parquet(stack_oof_path)
+    report = report_path.read_text(encoding="utf-8")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    assert stack_oof.columns.tolist() == ["id", "Churn", "fold", "candidate-a", "candidate-b"]
+    assert "Hill Climb Trace" in report
+    assert "candidate-c" in report
+    assert "min_gain" in report
+    assert manifest["accepted_candidate_ids"] == ["candidate-a", "candidate-b"]
+    assert manifest["selection_strategy"] == "hill_climb_greedy"
+    assert [step["experiment_id"] for step in manifest["hill_climb_trace"]] == [
+        "candidate-a",
+        "candidate-b",
+    ]
+
+
+def test_cli_stack_preflight_hill_climb_trace_matches_trimmed_max_parents(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    target_values = [0, 0, 0, 1, 1, 1]
+    oof_ids = [1, 2, 3, 4, 5, 6]
+    folds = [0, 0, 1, 1, 2, 2]
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.3875, 0.1827, 0.1269, 0.7535, 0.6218, 0.8165],
+            test_predictions=[0.30, 0.75],
+            model_family="lightgbm",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.3976, 0.2670, 0.3975, 0.8758, 0.8026, 0.8676],
+            test_predictions=[0.35, 0.82],
+            model_family="xgboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-c",
+            oof_predictions=[0.4453, 0.2794, 0.6253, 0.7271, 0.7707, 0.5872],
+            test_predictions=[0.40, 0.70],
+            model_family="catboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+            metric_name="log_loss",
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_hill_climb_trimmed.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-hill-climb-trimmed",
+        metric_name="log_loss",
+        candidate_ids=["candidate-a", "candidate-b", "candidate-c"],
+        max_parents=1,
+        min_parents=1,
+        selection={
+            "strategy": "hill_climb_greedy",
+            "min_gain": 0.0,
+            "report_top_k_pairs": 5,
+        },
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 0, result.stdout
+    stack_oof_path = (
+        artifact_root / "oof" / competition / "p05-stack-hill-climb-trimmed" / "stack_oof.parquet"
+    )
+    manifest_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-hill-climb-trimmed"
+        / "stacking_manifest.json"
+    )
+
+    stack_oof = pd.read_parquet(stack_oof_path)
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    assert stack_oof.columns.tolist() == ["id", "Churn", "fold", "candidate-a"]
+    assert manifest["accepted_candidate_ids"] == ["candidate-a"]
+    assert [step["experiment_id"] for step in manifest["hill_climb_trace"]] == ["candidate-a"]

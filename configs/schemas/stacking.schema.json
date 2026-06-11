@@ -33,12 +33,16 @@
           "properties": {
             "strategy": {
               "type": "string",
-              "enum": ["score_desc", "diversity_greedy"]
+              "enum": ["score_desc", "diversity_greedy", "hill_climb_greedy"]
             },
             "max_pairwise_corr": {
               "type": ["number", "null"],
               "minimum": 0.0,
               "maximum": 1.0
+            },
+            "min_gain": {
+              "type": ["number", "null"],
+              "minimum": 0.0
             },
             "report_top_k_pairs": {
               "type": ["integer", "null"],
