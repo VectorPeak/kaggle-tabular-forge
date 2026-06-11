@@ -18,6 +18,10 @@ stacking:
   top_n: 10
   max_parents: 2
   min_parents: 2
+  selection:
+    strategy: score_desc
+    max_pairwise_corr: 0.995
+    report_top_k_pairs: 10
   stacker:
     method: logistic_regression
     params:

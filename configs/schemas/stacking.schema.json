@@ -28,6 +28,25 @@
         "top_n": { "type": ["integer", "null"], "minimum": 1 },
         "max_parents": { "type": ["integer", "null"], "minimum": 1 },
         "min_parents": { "type": ["integer", "null"], "minimum": 1 },
+        "selection": {
+          "type": "object",
+          "properties": {
+            "strategy": {
+              "type": "string",
+              "enum": ["score_desc", "diversity_greedy"]
+            },
+            "max_pairwise_corr": {
+              "type": ["number", "null"],
+              "minimum": 0.0,
+              "maximum": 1.0
+            },
+            "report_top_k_pairs": {
+              "type": ["integer", "null"],
+              "minimum": 1
+            }
+          },
+          "additionalProperties": true
+        },
         "stacker": {
           "type": "object",
           "properties": {

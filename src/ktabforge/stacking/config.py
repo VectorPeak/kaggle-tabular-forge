@@ -10,6 +10,13 @@ from ktabforge.config.schema import bundled_schema_path, require_loaded_config_v
 
 
 @dataclass(frozen=True)
+class StackingSelectionConfig:
+    strategy: str
+    max_pairwise_corr: float | None
+    report_top_k_pairs: int
+
+
+@dataclass(frozen=True)
 class StackingPreflightConfig:
     experiment_id: str
     competition: str
@@ -21,6 +28,7 @@ class StackingPreflightConfig:
     top_n: int | None
     max_parents: int | None
     min_parents: int
+    selection: StackingSelectionConfig
     stacker_method: str
     stacker_params: dict[str, Any]
     config_path: Path
@@ -40,6 +48,9 @@ def load_stacking_config(config_path: str | Path) -> StackingPreflightConfig:
     stacker = stacking.get("stacker", {})
     if not isinstance(stacker, dict):
         raise TypeError("Stacking config section 'stacker' must be a mapping when provided.")
+    selection = stacking.get("selection", {})
+    if not isinstance(selection, dict):
+        raise TypeError("Stacking config section 'selection' must be a mapping when provided.")
 
     min_parents = _optional_int(stacking.get("min_parents"))
     return StackingPreflightConfig(
@@ -59,6 +70,11 @@ def load_stacking_config(config_path: str | Path) -> StackingPreflightConfig:
         top_n=_optional_int(stacking.get("top_n")),
         max_parents=_optional_int(stacking.get("max_parents")),
         min_parents=min_parents if min_parents is not None else 2,
+        selection=StackingSelectionConfig(
+            strategy=str(selection.get("strategy") or "score_desc"),
+            max_pairwise_corr=_optional_probability(selection.get("max_pairwise_corr")),
+            report_top_k_pairs=_optional_int(selection.get("report_top_k_pairs")) or 20,
+        ),
         stacker_method=str(stacker.get("method") or "preflight_only"),
         stacker_params=dict(stacker.get("params") or {}),
         config_path=path,
@@ -79,4 +95,13 @@ def _optional_int(value: object) -> int | None:
     parsed = int(value)
     if parsed <= 0:
         raise ValueError("Stacking integer options must be greater than 0 when set.")
+    return parsed
+
+
+def _optional_probability(value: object) -> float | None:
+    if value is None or str(value) == "":
+        return None
+    parsed = float(value)
+    if parsed < 0 or parsed > 1:
+        raise ValueError("Stacking probability options must be within [0, 1] when set.")
     return parsed

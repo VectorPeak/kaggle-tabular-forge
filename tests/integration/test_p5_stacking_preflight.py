@@ -20,9 +20,11 @@ def _write_candidate(
     id_column: str = "id",
     target: str = "Churn",
     seed: int = 42,
+    target_values: list[int] | None = None,
 ) -> dict[str, object]:
     oof_ids = oof_ids or [1, 2, 3, 4]
     folds = folds or [0, 0, 1, 1]
+    target_values = target_values or [0, 1, 0, 1]
     oof_path = artifact_root / "oof" / competition / experiment_id / "oof.parquet"
     test_path = artifact_root / "submissions" / competition / experiment_id / "submission.csv"
     oof_path.parent.mkdir(parents=True, exist_ok=True)
@@ -30,7 +32,7 @@ def _write_candidate(
     pd.DataFrame(
         {
             id_column: oof_ids,
-            target: [0, 1, 0, 1],
+            target: target_values,
             "prediction": oof_predictions,
             "fold": folds,
         }
@@ -78,25 +80,28 @@ def _write_stacking_config(
     candidate_ids: list[str] | None = None,
     stacker_method: str = "logistic_regression",
     stacker_params: dict[str, object] | None = None,
+    selection: dict[str, object] | None = None,
 ) -> Path:
-    payload = {
-        "stacking": {
-            "experiment_id": experiment_id,
-            "competition": competition,
-            "artifact_root": str(artifact_root),
-            "target": target,
-            "id_column": id_column,
-            "metric_name": "roc_auc",
-            "candidate_ids": candidate_ids or ["candidate-a", "candidate-b", "candidate-c"],
-            "top_n": 3,
-            "max_parents": 2,
-            "min_parents": 2,
-            "stacker": {
-                "method": stacker_method,
-                "params": stacker_params or {"C": 1.0, "max_iter": 200},
-            },
-        }
+    stacking_payload = {
+        "experiment_id": experiment_id,
+        "competition": competition,
+        "artifact_root": str(artifact_root),
+        "target": target,
+        "id_column": id_column,
+        "metric_name": "roc_auc",
+        "candidate_ids": candidate_ids or ["candidate-a", "candidate-b", "candidate-c"],
+        "top_n": 3,
+        "max_parents": 2,
+        "min_parents": 2,
+        "stacker": {
+            "method": stacker_method,
+            "params": stacker_params or {"C": 1.0, "max_iter": 200},
+        },
     }
+    if selection is not None:
+        stacking_payload["selection"] = selection
+
+    payload = {"stacking": stacking_payload}
     path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
     return path
 
@@ -330,3 +335,93 @@ def test_cli_stack_rejects_preflight_only_stacker(tmp_path):
 
     assert result.exit_code == 1
     assert "preflight_only" in result.stdout
+
+
+def test_cli_stack_preflight_diversity_selection_filters_high_correlation_candidate(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    competition = "churn_tiny"
+    target_values = [0, 1, 0, 1, 0, 1]
+    oof_ids = [1, 2, 3, 4, 5, 6]
+    folds = [0, 0, 1, 1, 2, 2]
+    rows = [
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-a",
+            oof_predictions=[0.10, 0.90, 0.20, 0.80, 0.15, 0.85],
+            test_predictions=[0.20, 0.80],
+            model_family="lightgbm",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-b",
+            oof_predictions=[0.11, 0.89, 0.21, 0.79, 0.14, 0.86],
+            test_predictions=[0.21, 0.79],
+            model_family="xgboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+        _write_candidate(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id="candidate-c",
+            oof_predictions=[0.30, 0.78, 0.25, 0.72, 0.45, 0.88],
+            test_predictions=[0.35, 0.75],
+            model_family="catboost",
+            oof_ids=oof_ids,
+            folds=folds,
+            target_values=target_values,
+        ),
+    ]
+    _write_registry(artifact_root, competition, rows)
+    config_path = _write_stacking_config(
+        tmp_path / "stacking_diversity.yaml",
+        artifact_root=artifact_root,
+        experiment_id="p05-stack-diversity",
+        candidate_ids=["candidate-a", "candidate-b", "candidate-c"],
+        selection={
+            "strategy": "diversity_greedy",
+            "max_pairwise_corr": 0.995,
+            "report_top_k_pairs": 5,
+        },
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["stack-preflight", "--config", str(config_path)])
+
+    assert result.exit_code == 0, result.stdout
+    stack_oof_path = (
+        artifact_root / "oof" / competition / "p05-stack-diversity" / "stack_oof.parquet"
+    )
+    report_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-diversity"
+        / "selection_report.md"
+    )
+    manifest_path = (
+        artifact_root
+        / "experiments"
+        / competition
+        / "p05-stack-diversity"
+        / "stacking_manifest.json"
+    )
+
+    stack_oof = pd.read_parquet(stack_oof_path)
+    report = report_path.read_text(encoding="utf-8")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+
+    assert stack_oof.columns.tolist() == ["id", "Churn", "fold", "candidate-a", "candidate-c"]
+    assert "candidate-b" in report
+    assert "max_pairwise_corr" in report
+    assert "Top Correlated Pairs" in report
+    assert "candidate-a" in report and "candidate-b" in report
+    assert manifest["accepted_candidate_ids"] == ["candidate-a", "candidate-c"]
+    assert manifest["selection_strategy"] == "diversity_greedy"
+    assert manifest["selection_max_pairwise_corr"] == 0.995

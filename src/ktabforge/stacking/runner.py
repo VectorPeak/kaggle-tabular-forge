@@ -24,6 +24,7 @@ from ktabforge.metrics.scoring import metric_mode, score_predictions
 from ktabforge.registry.experiments import append_experiment_registry
 from ktabforge.safety.gates import evaluate_artifact_safety
 from ktabforge.stacking.config import StackingPreflightConfig, load_stacking_config
+from ktabforge.stacking.selection import PairwiseCorrelation, apply_selection_policy
 from ktabforge.utils.hashing import stable_hash
 
 
@@ -58,6 +59,7 @@ class StackRunResult:
 class _SelectedCandidates:
     accepted: list[CandidateRecord]
     rejected: list[CandidateCompatibilityRejection]
+    pairwise_correlations: list[PairwiseCorrelation]
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,7 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
         _selection_report(
             accepted=selection.accepted,
             rejected=selection.rejected,
+            pairwise_correlations=selection.pairwise_correlations,
             config=config,
         ),
     )
@@ -115,6 +118,7 @@ def run_preflight(config: StackingPreflightConfig) -> StackingPreflightResult:
             config=config,
             accepted=selection.accepted,
             rejected=selection.rejected,
+            pairwise_correlations=selection.pairwise_correlations,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -190,6 +194,7 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
         _selection_report(
             accepted=selection.accepted,
             rejected=selection.rejected,
+            pairwise_correlations=selection.pairwise_correlations,
             config=config,
         ),
     )
@@ -199,6 +204,7 @@ def run_stack(config: StackingPreflightConfig) -> StackRunResult:
             config=config,
             accepted=selection.accepted,
             rejected=selection.rejected,
+            pairwise_correlations=selection.pairwise_correlations,
             stack_oof_path=stack_oof_path,
             stack_test_path=stack_test_path,
             stack_oof=stack_oof,
@@ -304,7 +310,6 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         min_parents=1,
     )
 
-    accepted = list(compatibility.accepted)
     rejected = [
         CandidateCompatibilityRejection(
             experiment_id=item.experiment_id,
@@ -322,6 +327,15 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
         for experiment_id in missing_ids
     )
 
+    selected = apply_selection_policy(
+        list(compatibility.accepted),
+        rejected=rejected,
+        strategy=config.selection.strategy,
+        max_pairwise_corr=config.selection.max_pairwise_corr,
+    )
+    accepted = list(selected.accepted)
+    rejected = list(selected.rejected)
+
     if config.max_parents is not None and len(accepted) > config.max_parents:
         overflow = accepted[config.max_parents :]
         rejected.extend(
@@ -338,7 +352,11 @@ def _select_candidates(config: StackingPreflightConfig) -> _SelectedCandidates:
             f"stack-preflight requires at least {config.min_parents} compatible parents; "
             f"found {len(accepted)}"
         )
-    return _SelectedCandidates(accepted=accepted, rejected=rejected)
+    return _SelectedCandidates(
+        accepted=accepted,
+        rejected=rejected,
+        pairwise_correlations=selected.pairwise_correlations,
+    )
 
 
 def _build_candidate_record(
@@ -546,6 +564,7 @@ def _selection_report(
     *,
     accepted: list[CandidateRecord],
     rejected: list[CandidateCompatibilityRejection],
+    pairwise_correlations: list[PairwiseCorrelation],
     config: StackingPreflightConfig,
 ) -> str:
     accepted_lines = [
@@ -574,6 +593,17 @@ def _selection_report(
             f"| {item.experiment_id} | {_escape_markdown_cell(item.reason)} |"
         )
 
+    top_pairs = pairwise_correlations[: config.selection.report_top_k_pairs]
+    pair_lines = [
+        "| left_experiment_id | right_experiment_id | correlation | abs_correlation |",
+        "| --- | --- | --- | --- |",
+    ]
+    for item in top_pairs:
+        pair_lines.append(
+            f"| {item.left_experiment_id} | {item.right_experiment_id} | "
+            f"{item.correlation:.6f} | {item.abs_correlation:.6f} |"
+        )
+
     return (
         "# Stacking Preflight Selection Report\n\n"
         f"- experiment_id: `{config.experiment_id}`\n"
@@ -581,11 +611,16 @@ def _selection_report(
         f"- metric_name: `{config.metric_name}`\n"
         f"- min_parents: `{config.min_parents}`\n"
         f"- max_parents: `{config.max_parents}`\n"
+        f"- selection_strategy: `{config.selection.strategy}`\n"
+        f"- selection_max_pairwise_corr: `{config.selection.max_pairwise_corr}`\n"
+        f"- selection_report_top_k_pairs: `{config.selection.report_top_k_pairs}`\n"
         f"- stacker_method: `{config.stacker_method}`\n\n"
         "## Accepted Candidates\n\n"
         f"{chr(10).join(accepted_lines)}\n\n"
         "## Rejected Candidates\n\n"
-        f"{chr(10).join(rejected_lines)}\n"
+        f"{chr(10).join(rejected_lines)}\n\n"
+        "## Top Correlated Pairs\n\n"
+        f"{chr(10).join(pair_lines)}\n"
     )
 
 
@@ -594,6 +629,7 @@ def _stacking_manifest(
     config: StackingPreflightConfig,
     accepted: list[CandidateRecord],
     rejected: list[CandidateCompatibilityRejection],
+    pairwise_correlations: list[PairwiseCorrelation],
     stack_oof_path: Path,
     stack_test_path: Path,
     stack_oof: pd.DataFrame,
@@ -612,10 +648,22 @@ def _stacking_manifest(
         "metric_name": config.metric_name,
         "stacker_method": config.stacker_method,
         "stacker_params": config.stacker_params,
+        "selection_strategy": config.selection.strategy,
+        "selection_max_pairwise_corr": config.selection.max_pairwise_corr,
+        "selection_report_top_k_pairs": config.selection.report_top_k_pairs,
         "accepted_candidate_ids": [candidate.experiment_id for candidate in accepted],
         "rejected_candidates": [
             {"experiment_id": item.experiment_id, "reason": item.reason}
             for item in rejected
+        ],
+        "pairwise_correlations": [
+            {
+                "left_experiment_id": item.left_experiment_id,
+                "right_experiment_id": item.right_experiment_id,
+                "correlation": item.correlation,
+                "abs_correlation": item.abs_correlation,
+            }
+            for item in pairwise_correlations[: config.selection.report_top_k_pairs]
         ],
         "stack_oof_path": str(stack_oof_path),
         "stack_test_path": str(stack_test_path),
