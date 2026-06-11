@@ -1,0 +1,15 @@
+eda:
+  eda_id: p06-churn-eda-example
+  competition: playground-series-s6e3
+  artifact_root: artifacts
+
+data:
+  data_dir: data/playground-series-s6e3/raw
+  target: Churn
+  id_column: id
+
+scan:
+  profile_train: true
+  profile_test: true
+  include_drift: true
+  include_leakage_watchlist: true

@@ -49,3 +49,15 @@ def test_stacking_example_matches_schema():
 
     assert result.valid is True
     assert result.errors == []
+
+
+def test_eda_example_matches_schema():
+    repo_root = Path(__file__).resolve().parents[2]
+
+    result = validate_config_file(
+        repo_root / "configs" / "eda" / "p06_churn_eda.example.yaml",
+        repo_root / "configs" / "schemas" / "eda.schema.json",
+    )
+
+    assert result.valid is True
+    assert result.errors == []

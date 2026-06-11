@@ -6,6 +6,7 @@ import typer
 from ktabforge.config.schema import validate_config_file
 
 app = typer.Typer(help="Evidence-first tools for Kaggle tabular workflows.")
+eda_app = typer.Typer(help="EDA scan tools.")
 
 ConfigOption = Annotated[
     Path, typer.Option("--config", exists=True, file_okay=True, dir_okay=False)
@@ -26,6 +27,8 @@ SeedOption = Annotated[int, typer.Option("--seed")]
 TopNOption = Annotated[int, typer.Option("--top-n")]
 MaxRunsOption = Annotated[int | None, typer.Option("--max-runs")]
 DryRunOption = Annotated[bool, typer.Option("--dry-run")]
+
+app.add_typer(eda_app, name="eda")
 
 
 @app.command("validate-config")
@@ -195,3 +198,20 @@ def stack(config: ConfigOption) -> None:
         )
         return
     typer.echo(str(status))
+
+
+@eda_app.command("scan")
+def eda_scan(config: ConfigOption) -> None:
+    """Run an EDA scan from a YAML config file."""
+    from ktabforge.eda.runner import run_eda_scan_from_config
+
+    try:
+        result = run_eda_scan_from_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    status = getattr(result, "status", None) or "completed"
+    eda_id = getattr(result, "eda_id", None) or "unknown"
+    artifact_dir = getattr(result, "artifact_dir", None) or ""
+    typer.echo(f"status: {status} eda_id: {eda_id} artifact_dir: {artifact_dir}")

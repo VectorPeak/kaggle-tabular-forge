@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EdaConfig",
+  "type": "object",
+  "required": ["eda", "data"],
+  "properties": {
+    "eda": {
+      "type": "object",
+      "required": ["eda_id", "competition", "artifact_root"],
+      "properties": {
+        "eda_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "competition": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "artifact_root": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "data": {
+      "type": "object",
+      "required": ["data_dir", "target", "id_column"],
+      "properties": {
+        "data_dir": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "id_column": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "scan": {
+      "type": "object",
+      "properties": {
+        "profile_train": { "type": "boolean" },
+        "profile_test": { "type": "boolean" },
+        "include_drift": { "type": "boolean" },
+        "include_leakage_watchlist": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

@@ -37,3 +37,22 @@ uv run ktab factory --config configs\matrices\p04_churn_candidate_factory.exampl
 P4 会从 matrix 配置展开多个 P2 experiment config。建议先 dry-run，确认 `experiment_id`、`max_runs` 和 artifact 路径后再执行。
 
 注意：示例里的 `experiment_id` 是固定的。重复运行同一个配置会因为 artifact 不允许覆盖而失败；需要重新运行时，请复制配置并改一个新的 `experiment_id`。
+
+P6.1 EDA scan 示例：
+
+```powershell
+uv run ktab eda scan --config configs\eda\p06_churn_eda.example.yaml
+```
+
+这个命令会从标准 `train.csv` / `test.csv` / `sample_submission.csv` 布局读取数据，并写出：
+
+- `eda_manifest.json`
+- `eda_summary.md`
+- `leakage_watchlist.json`
+- `feature_backlog.json`
+
+默认 artifact 目录：
+
+```text
+artifacts/eda_findings/<competition>/<eda_id>/
+```
