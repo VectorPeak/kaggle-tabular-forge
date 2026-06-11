@@ -76,7 +76,11 @@ def run(config: ConfigOption) -> None:
     """Run an experiment from a YAML config file."""
     from ktabforge.pipeline.runner import run_experiment_from_config
 
-    result = run_experiment_from_config(config)
+    try:
+        result = run_experiment_from_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
     status = getattr(result, "status", None) or "completed"
     typer.echo(f"{status}")
 
@@ -107,7 +111,11 @@ def ensemble(config: ConfigOption) -> None:
     """Run an OOF-backed ensemble from a YAML config file."""
     from ktabforge.ensembles.runner import run_ensemble_from_config
 
-    result = run_ensemble_from_config(config)
+    try:
+        result = run_ensemble_from_config(config)
+    except (FileExistsError, TypeError, ValueError) as exc:
+        typer.echo(str(exc))
+        raise typer.Exit(code=1) from exc
     typer.echo(result.status)
 
 

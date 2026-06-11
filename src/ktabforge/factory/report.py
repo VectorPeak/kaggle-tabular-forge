@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from ktabforge.metrics.scoring import metric_higher_is_better
+
 
 def write_candidate_report(
     path: str | Path,
@@ -17,7 +19,11 @@ def write_candidate_report(
     completed = summary[summary["status"] == "completed"].copy()
     if "oof_score" in completed.columns:
         completed["oof_score"] = pd.to_numeric(completed["oof_score"], errors="coerce")
-        completed = completed.sort_values("oof_score", ascending=False, na_position="last")
+        completed = completed.sort_values(
+            "oof_score",
+            ascending=not metric_higher_is_better(metric_name),
+            na_position="last",
+        )
     top = completed.head(top_n)
     failed = summary[summary["status"] == "failed"].copy()
 

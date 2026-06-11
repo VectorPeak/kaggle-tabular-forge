@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EnsembleConfig",
+  "type": "object",
+  "required": ["ensemble"],
+  "properties": {
+    "ensemble": {
+      "type": "object",
+      "required": [
+        "experiment_id",
+        "competition",
+        "artifact_root",
+        "target",
+        "metric_name",
+        "method"
+      ],
+      "properties": {
+        "experiment_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "competition": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "artifact_root": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": "string",
+          "minLength": 1
+        },
+        "id_column": {
+          "type": "string",
+          "minLength": 1
+        },
+        "metric_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "method": {
+          "type": "string",
+          "enum": ["simple_average", "rank_average", "weighted_average"]
+        },
+        "candidate_ids": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "weights": {
+          "type": "object",
+          "additionalProperties": { "type": "number" }
+        },
+        "top_n": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

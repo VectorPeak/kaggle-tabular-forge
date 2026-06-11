@@ -6,13 +6,14 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
+from ktabforge.artifacts.failures import record_failure
 from ktabforge.artifacts.layout import build_artifact_paths, ensure_new_artifact_layout
 from ktabforge.artifacts.writers import write_csv, write_json, write_markdown, write_parquet
 from ktabforge.candidates.alignment import CandidatePredictions, load_aligned_predictions
 from ktabforge.candidates.pool import CandidatePool, build_candidate_pool
 from ktabforge.ensembles.averaging import average_predictions
 from ktabforge.ensembles.config import EnsembleConfig, load_ensemble_config
-from ktabforge.metrics.scoring import safe_roc_auc_score
+from ktabforge.metrics.scoring import metric_mode, score_predictions
 from ktabforge.registry.experiments import append_experiment_registry
 from ktabforge.utils.hashing import stable_hash
 
@@ -33,106 +34,135 @@ def run_ensemble_from_config(config_path: str | Path) -> EnsembleRunResult:
 
 
 def run_ensemble(config: EnsembleConfig) -> EnsembleRunResult:
-    pool = build_candidate_pool(
-        artifact_root=config.artifact_root,
-        competition=config.competition,
-        metric_name=config.metric_name,
-        candidate_ids=config.candidate_ids,
-        top_n=config.top_n,
-    )
-    if not pool.candidates:
-        raise ValueError("No eligible ensemble candidates found")
-    _ensure_requested_candidates_eligible(pool, config.candidate_ids)
-
-    loaded = load_aligned_predictions(pool.candidates, target=config.target)
-    oof = _build_ensemble_oof(loaded, config=config)
-    submission = _build_ensemble_submission(loaded, config=config)
-    fold_metrics = _build_fold_metrics(oof, metric_name=config.metric_name, target=config.target)
-    oof_score = float(safe_roc_auc_score(oof[config.target], oof["prediction"]))
-
     paths = build_artifact_paths(
         config.artifact_root,
         config.competition,
         config.experiment_id,
     )
-    ensure_new_artifact_layout(paths)
+    try:
+        pool = build_candidate_pool(
+            artifact_root=config.artifact_root,
+            competition=config.competition,
+            metric_name=config.metric_name,
+            candidate_ids=config.candidate_ids,
+            top_n=config.top_n,
+        )
+        if not pool.candidates:
+            raise ValueError("No eligible ensemble candidates found")
+        _ensure_requested_candidates_eligible(pool, config.candidate_ids)
 
-    write_parquet(paths.oof_path, oof)
-    write_csv(paths.submission_path, submission)
-    write_csv(paths.fold_metrics_path, fold_metrics)
-    write_json(
-        paths.metrics_path,
-        {
-            "metric_name": config.metric_name,
-            "oof_score": oof_score,
-            "status": "completed",
-            "reason": "ensemble completed",
-        },
-    )
-    paths.config_snapshot_path.write_text(
-        yaml.safe_dump(config.raw, sort_keys=False),
-        encoding="utf-8",
-    )
+        loaded = load_aligned_predictions(pool.candidates, target=config.target)
+        oof = _build_ensemble_oof(loaded, config=config)
+        submission = _build_ensemble_submission(loaded, config=config)
+        fold_metrics = _build_fold_metrics(
+            oof,
+            metric_name=config.metric_name,
+            target=config.target,
+        )
+        oof_score = float(
+            score_predictions(
+                config.metric_name,
+                oof[config.target],
+                oof["prediction"],
+            )
+        )
+        ensure_new_artifact_layout(paths)
 
-    candidate_pool_path = paths.experiment_dir / "candidate_pool.parquet"
-    ensemble_manifest_path = paths.experiment_dir / "ensemble_manifest.json"
-    selection_report_path = paths.experiment_dir / "selection_report.md"
-    run_manifest_path = paths.run_manifest_path
+        write_parquet(paths.oof_path, oof)
+        write_csv(paths.submission_path, submission)
+        write_csv(paths.fold_metrics_path, fold_metrics)
+        write_json(
+            paths.metrics_path,
+            {
+                "metric_name": config.metric_name,
+                "metric_mode": metric_mode(config.metric_name),
+                "oof_score": oof_score,
+                "status": "completed",
+                "reason": "ensemble completed",
+            },
+        )
+        paths.config_snapshot_path.write_text(
+            yaml.safe_dump(config.raw, sort_keys=False),
+            encoding="utf-8",
+        )
 
-    write_parquet(candidate_pool_path, pool.to_frame())
-    write_json(ensemble_manifest_path, _ensemble_manifest(config, pool, oof_score))
-    write_markdown(selection_report_path, _selection_report(pool))
-    write_json(
-        run_manifest_path,
-        {
-            "competition": config.competition,
-            "experiment_id": config.experiment_id,
-            "run_mode": "ensemble",
-            "method": config.method,
-            "parent_experiment_ids": [candidate.experiment_id for candidate in pool.candidates],
-            "status": "completed",
-        },
-    )
+        candidate_pool_path = paths.experiment_dir / "candidate_pool.parquet"
+        ensemble_manifest_path = paths.experiment_dir / "ensemble_manifest.json"
+        selection_report_path = paths.experiment_dir / "selection_report.md"
+        run_manifest_path = paths.run_manifest_path
 
-    append_experiment_registry(
-        paths.registry_path,
-        {
-            "experiment_id": config.experiment_id,
-            "competition": config.competition,
-            "metric_name": config.metric_name,
-            "oof_score": oof_score,
-            "status": "completed",
-            "oof_path": str(paths.oof_path),
-            "test_pred_path": str(paths.submission_path),
-            "fold_metrics_path": str(paths.fold_metrics_path),
-            "model_family": "ensemble",
-            "model_preset": config.method,
-            "feature_set": "ensemble",
-            "config_hash": stable_hash(config.raw),
-            "seed": None,
-            "run_mode": "ensemble",
-            "reason": "ensemble completed",
-            "feature_manifest_hash": None,
-            "prediction_type": "probability",
-            "parent_experiment_ids": ",".join(
-                candidate.experiment_id for candidate in pool.candidates
-            ),
-            "parent_count": len(pool.candidates),
-            "ensemble_recipe": config.method,
-            "candidate_pool_path": str(candidate_pool_path),
-            "ensemble_manifest_path": str(ensemble_manifest_path),
-            "selection_report_path": str(selection_report_path),
-        },
-    )
+        write_parquet(candidate_pool_path, pool.to_frame())
+        write_json(ensemble_manifest_path, _ensemble_manifest(config, pool, oof_score))
+        write_markdown(selection_report_path, _selection_report(pool))
+        write_json(
+            run_manifest_path,
+            {
+                "competition": config.competition,
+                "experiment_id": config.experiment_id,
+                "run_mode": "ensemble",
+                "method": config.method,
+                "parent_experiment_ids": [candidate.experiment_id for candidate in pool.candidates],
+                "status": "completed",
+            },
+        )
 
-    return EnsembleRunResult(
-        status="completed",
-        oof_score=oof_score,
-        experiment_id=config.experiment_id,
-        registry_path=paths.registry_path,
-        oof_path=paths.oof_path,
-        submission_path=paths.submission_path,
-    )
+        append_experiment_registry(
+            paths.registry_path,
+            {
+                "experiment_id": config.experiment_id,
+                "competition": config.competition,
+                "metric_name": config.metric_name,
+                "metric_mode": metric_mode(config.metric_name),
+                "oof_score": oof_score,
+                "status": "completed",
+                "oof_path": str(paths.oof_path),
+                "test_pred_path": str(paths.submission_path),
+                "fold_metrics_path": str(paths.fold_metrics_path),
+                "model_family": "ensemble",
+                "model_preset": config.method,
+                "feature_set": "ensemble",
+                "config_hash": stable_hash(config.raw),
+                "seed": None,
+                "run_mode": "ensemble",
+                "reason": "ensemble completed",
+                "feature_manifest_hash": None,
+                "prediction_type": "probability",
+                "parent_experiment_ids": ",".join(
+                    candidate.experiment_id for candidate in pool.candidates
+                ),
+                "parent_count": len(pool.candidates),
+                "ensemble_recipe": config.method,
+                "candidate_pool_path": str(candidate_pool_path),
+                "ensemble_manifest_path": str(ensemble_manifest_path),
+                "selection_report_path": str(selection_report_path),
+            },
+        )
+
+        return EnsembleRunResult(
+            status="completed",
+            oof_score=oof_score,
+            experiment_id=config.experiment_id,
+            registry_path=paths.registry_path,
+            oof_path=paths.oof_path,
+            submission_path=paths.submission_path,
+        )
+    except FileExistsError:
+        raise
+    except Exception as exc:
+        record_failure(
+            artifact_root=config.artifact_root,
+            competition=config.competition,
+            experiment_id=config.experiment_id,
+            reason=str(exc),
+            run_mode="ensemble",
+            config_path=config.config_path,
+            config_hash=stable_hash(config.raw),
+            metric_name=config.metric_name,
+            model_family="ensemble",
+            model_preset=config.method,
+            feature_set="ensemble",
+        )
+        raise
 
 
 def _ensure_requested_candidates_eligible(pool: CandidatePool, requested_ids: list[str]) -> None:
@@ -203,7 +233,7 @@ def _build_fold_metrics(
         rows.append(
             {
                 "fold": fold,
-                metric_name: safe_roc_auc_score(frame[target], frame["prediction"]),
+                metric_name: score_predictions(metric_name, frame[target], frame["prediction"]),
                 "rows": len(frame),
             }
         )

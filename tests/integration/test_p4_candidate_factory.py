@@ -72,7 +72,11 @@ def _write_matrix_config(
     return path
 
 
-def _fake_result(status: str = "completed", score: float = 0.7) -> ExperimentRunResult:
+def _fake_result(
+    status: str = "completed",
+    score: float = 0.7,
+    metric_name: str = "roc_auc",
+) -> ExperimentRunResult:
     paths = type(
         "Paths",
         (),
@@ -86,7 +90,7 @@ def _fake_result(status: str = "completed", score: float = 0.7) -> ExperimentRun
         status=status,
         oof_score=score,
         paths=paths,
-        metric_name="roc_auc",
+        metric_name=metric_name,
         reason="ok",
     )
 
@@ -235,3 +239,33 @@ def test_candidate_factory_marks_remaining_runs_skipped_when_stopping_on_failure
     assert summary["status"].tolist() == ["completed", "failed", "skipped"]
     skipped = summary.loc[summary["status"] == "skipped"].iloc[0]
     assert skipped["reason"] == "stopped after previous failure"
+
+
+def test_candidate_factory_report_respects_minimize_metric_order(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    artifact_root = tmp_path / "artifacts"
+    config_path = _write_matrix_config(
+        tmp_path / "matrix.yaml",
+        repo_root=repo_root,
+        artifact_root=artifact_root,
+        axes={"experiment.seed": [11, 22]},
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    payload["report"]["metric_name"] = "log_loss"
+    config_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    scores = {
+        "p04-logistic_regression-seed11": 0.42,
+        "p04-logistic_regression-seed22": 0.21,
+    }
+
+    def fake_runner(config_path: Path) -> ExperimentRunResult:
+        run_payload: dict[str, Any] = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        experiment_id = run_payload["experiment"]["experiment_id"]
+        return _fake_result(score=scores[experiment_id], metric_name="log_loss")
+
+    result = run_factory_from_config(config_path, experiment_runner=fake_runner)
+
+    report_text = result.report_path.read_text(encoding="utf-8")
+    assert report_text.index("p04-logistic_regression-seed22") < report_text.index(
+        "p04-logistic_regression-seed11"
+    )

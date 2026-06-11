@@ -1,44 +1,38 @@
-# Single-experiment configuration.
+# Single-experiment runtime configuration.
 # Human-edited YAML. Validate with configs/schemas/experiment.schema.json.
 
 experiment:
-  experiment_id: 20260606-1430-lgbm-baseline-v1
+  experiment_id: p02-lgbm-basic-example
   competition: playground-series-s6e3
-  hypothesis: LightGBM baseline with core categorical and frequency features.
-  base_experiment: null
+  hypothesis: LightGBM smoke baseline with basic inferred features.
   seed: 42
   run_mode: smoke
   tags:
+    - p2
     - baseline
-    - gbdt
+    - lightgbm
 
 data:
-  competition_config: configs/competition.example.yaml
-  feature_catalog: configs/feature_catalog.example.yaml
+  data_dir: data/playground-series-s6e3/raw
+  artifact_root: artifacts
+  target: Churn
+  id_column: id
+
+validation:
+  strategy: stratified_kfold
+  n_splits: 3
+  shuffle: true
+  seed: 42
 
 features:
+  feature_set: basic_inferred
   families:
-    - basic_numeric
-    - categorical_encoding
-    - frequency_count_encoding
-  cache: true
+    - basic
 
 model:
   family: lightgbm
   preset: baseline
   params:
-    objective: binary
-    learning_rate: 0.03
-    num_leaves: 63
-    n_estimators: 2000
-
-validation:
-  use_competition_default: true
-  save_oof: true
-  save_fold_metrics: true
-
-outputs:
-  experiment_dir: artifacts/experiments/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
-  oof_dir: artifacts/oof/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
-  submission_dir: artifacts/submissions/playground-series-s6e3/20260606-1430-lgbm-baseline-v1
-
+    learning_rate: 0.05
+    n_estimators: 200
+    num_leaves: 31

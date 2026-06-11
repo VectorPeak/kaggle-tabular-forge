@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from ktabforge.config.loader import load_yaml_file
+from ktabforge.config.safety import safe_path_segment
+from ktabforge.config.schema import bundled_schema_path, require_loaded_config_valid
 from ktabforge.utils.hashing import stable_hash
 
-_SAFE_PATH_SEGMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
 _SAFE_AXIS_PATH = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)+$")
 _FORBIDDEN_AXIS_KEYS = {
     "data.artifact_root",
@@ -41,6 +42,7 @@ def load_matrix_config(config_path: str | Path) -> MatrixConfig:
     payload = load_yaml_file(path)
     if not isinstance(payload, dict):
         raise TypeError("Matrix config must be a YAML mapping.")
+    require_loaded_config_valid(payload, bundled_schema_path("matrix.schema.json"))
 
     factory = _mapping(payload, "factory")
     matrix = _mapping(payload, "matrix")
@@ -54,8 +56,8 @@ def load_matrix_config(config_path: str | Path) -> MatrixConfig:
     report_top_n = _positive_int(report.get("top_n", 20), field="report.top_n")
 
     return MatrixConfig(
-        factory_id=_safe_path_segment(_required_string(factory, "factory_id"), field="factory_id"),
-        competition=_safe_path_segment(
+        factory_id=safe_path_segment(_required_string(factory, "factory_id"), field="factory_id"),
+        competition=safe_path_segment(
             _required_string(factory, "competition"),
             field="competition",
         ),
@@ -130,9 +132,3 @@ def _validate_axis_path(axis_path: str) -> None:
         raise ValueError(f"Unsafe matrix axis path: {axis_path}")
     if any(axis_path.startswith(prefix) for prefix in _FORBIDDEN_AXIS_PREFIXES):
         raise ValueError(f"Unsafe matrix axis path: {axis_path}")
-
-
-def _safe_path_segment(value: str, *, field: str) -> str:
-    if "/" in value or "\\" in value or ".." in value or not _SAFE_PATH_SEGMENT.match(value):
-        raise ValueError(f"Unsafe {field}: {value}")
-    return value

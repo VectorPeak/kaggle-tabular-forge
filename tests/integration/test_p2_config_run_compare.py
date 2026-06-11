@@ -128,3 +128,54 @@ def test_cli_run_and_compare_use_registry_evidence(tmp_path):
     comparison = compare_experiments(artifact_root=artifact_root, competition="churn_tiny")
     assert comparison.iloc[0]["experiment_id"] == "p2-cli-run"
 
+
+def test_run_records_failed_registry_row_without_success_artifact_dirs(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    artifact_root = tmp_path / "artifacts"
+    config_path = _write_experiment_config(
+        tmp_path / "experiment.yaml",
+        repo_root=repo_root,
+        artifact_root=artifact_root,
+        experiment_id="p2-config-failed-run",
+        model_family="unknown_model",
+    )
+
+    try:
+        run_experiment_from_config(config_path)
+    except ValueError as exc:
+        assert "Unknown model family" in str(exc)
+    else:
+        raise AssertionError("unknown model family should fail")
+
+    registry_path = artifact_root / "registry" / "churn_tiny" / "experiment_registry.csv"
+    assert registry_path.exists()
+    registry = pd.read_csv(registry_path)
+    row = registry.loc[registry["experiment_id"] == "p2-config-failed-run"].iloc[0]
+    assert row["status"] == "failed"
+    assert "failure_record_path" in registry.columns
+    assert pd.isna(row["oof_path"])
+    assert pd.isna(row["test_pred_path"])
+    assert Path(row["failure_record_path"]).exists()
+    assert not (artifact_root / "experiments" / "churn_tiny" / "p2-config-failed-run").exists()
+    assert not (artifact_root / "oof" / "churn_tiny" / "p2-config-failed-run").exists()
+    assert not (artifact_root / "submissions" / "churn_tiny" / "p2-config-failed-run").exists()
+
+
+def test_cli_run_rejects_unsafe_experiment_id(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    artifact_root = tmp_path / "artifacts"
+    config_path = _write_experiment_config(
+        tmp_path / "experiment.yaml",
+        repo_root=repo_root,
+        artifact_root=artifact_root,
+        experiment_id="p2-cli-run",
+    )
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    payload["experiment"]["experiment_id"] = "../escape"
+    config_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["run", "--config", str(config_path)])
+
+    assert result.exit_code != 0
+    assert "experiment_id" in result.stdout

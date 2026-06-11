@@ -231,7 +231,7 @@ def test_matrix_config_rejects_unsafe_factory_id_and_competition(tmp_path):
         try:
             load_matrix_config(config_path)
         except ValueError as exc:
-            assert "Unsafe" in str(exc)
+            assert "factory." in str(exc)
         else:
             raise AssertionError("unsafe factory path segments should be rejected")
 
@@ -257,7 +257,7 @@ def test_matrix_config_rejects_unsafe_axis_paths(tmp_path):
         try:
             load_matrix_config(config_path)
         except ValueError as exc:
-            assert "Unsafe matrix axis path" in str(exc)
+            assert "matrix.axes" in str(exc)
         else:
             raise AssertionError("unsafe matrix axis path should be rejected")
 
@@ -276,7 +276,7 @@ def test_matrix_config_requires_strict_boolean_and_positive_top_n(tmp_path):
 
     try:
         load_matrix_config(config_path)
-    except TypeError as exc:
+    except ValueError as exc:
         assert "continue_on_error" in str(exc)
     else:
         raise AssertionError("string booleans should be rejected")

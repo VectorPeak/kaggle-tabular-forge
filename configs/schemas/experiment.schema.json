@@ -2,14 +2,22 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "ExperimentConfig",
   "type": "object",
-  "required": ["experiment", "data", "features", "model", "validation", "outputs"],
+  "required": ["experiment", "data", "features", "model", "validation"],
   "properties": {
     "experiment": {
       "type": "object",
-      "required": ["experiment_id", "competition", "hypothesis", "seed", "run_mode"],
+      "required": ["experiment_id", "competition"],
       "properties": {
-        "experiment_id": { "type": "string" },
-        "competition": { "type": "string" },
+        "experiment_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
+        "competition": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.-]+$"
+        },
         "hypothesis": { "type": "string" },
         "base_experiment": { "type": ["string", "null"] },
         "seed": { "type": "integer" },
@@ -18,7 +26,17 @@
       },
       "additionalProperties": true
     },
-    "data": { "type": "object" },
+    "data": {
+      "type": "object",
+      "required": ["data_dir", "artifact_root", "target", "id_column"],
+      "properties": {
+        "data_dir": { "type": "string", "minLength": 1 },
+        "artifact_root": { "type": "string", "minLength": 1 },
+        "target": { "type": "string", "minLength": 1 },
+        "id_column": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
     "features": { "type": "object" },
     "model": {
       "type": "object",
@@ -35,4 +53,3 @@
   },
   "additionalProperties": true
 }
-

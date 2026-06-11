@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from ktabforge.artifacts.alignment import build_oof_frame, build_submission_frame
+from ktabforge.artifacts.failures import record_failure
 from ktabforge.artifacts.layout import build_artifact_paths, ensure_new_artifact_layout
 from ktabforge.artifacts.manifests import (
     add_file_checksums,
@@ -43,149 +44,163 @@ def run_smoke_evidence(
     from ktabforge.models.baseline import run_logistic_oof_baseline
 
     paths = build_artifact_paths(artifact_root, competition, experiment_id)
-    ensure_new_artifact_layout(paths)
-
-    context = RunContext(
-        data_dir=Path(data_dir),
-        artifact_root=Path(artifact_root),
-        competition=competition,
-        experiment_id=experiment_id,
-        target=target,
-        id_column=id_column,
-        n_splits=n_splits,
-        seed=seed,
-        paths=paths,
-    )
-
-    frames = _normalize_frames(
-        _call_with_supported_kwargs(
-            load_tabular_frames,
+    try:
+        context = RunContext(
             data_dir=Path(data_dir),
+            artifact_root=Path(artifact_root),
+            competition=competition,
+            experiment_id=experiment_id,
             target=target,
             id_column=id_column,
+            n_splits=n_splits,
+            seed=seed,
+            paths=paths,
         )
-    )
-    train = frames["train"]
-    test = frames["test"]
-    sample_submission = frames.get("sample_submission")
 
-    schema_audit = _call_with_supported_kwargs(
-        audit_tabular_frames,
-        train=train,
-        test=test,
-        sample_submission=sample_submission,
-        target=target,
-        id_column=id_column,
-        frames=frames,
-    )
-    raw_folds = _call_with_supported_kwargs(
-        build_stratified_folds,
-        train=train,
-        target=target,
-        id_column=id_column,
-        n_splits=n_splits,
-        seed=seed,
-    )
-    folds = _normalize_folds(raw_folds, len(train))
+        frames = _normalize_frames(
+            _call_with_supported_kwargs(
+                load_tabular_frames,
+                data_dir=Path(data_dir),
+                target=target,
+                id_column=id_column,
+            )
+        )
+        train = frames["train"]
+        test = frames["test"]
+        sample_submission = frames.get("sample_submission")
 
-    baseline_result = _call_with_supported_kwargs(
-        run_logistic_oof_baseline,
-        train=train,
-        test=test,
-        target=target,
-        id_column=id_column,
-        folds=raw_folds,
-        fold=folds,
-        n_splits=n_splits,
-        seed=seed,
-    )
+        schema_audit = _call_with_supported_kwargs(
+            audit_tabular_frames,
+            train=train,
+            test=test,
+            sample_submission=sample_submission,
+            target=target,
+            id_column=id_column,
+            frames=frames,
+        )
+        raw_folds = _call_with_supported_kwargs(
+            build_stratified_folds,
+            train=train,
+            target=target,
+            id_column=id_column,
+            n_splits=n_splits,
+            seed=seed,
+        )
+        folds = _normalize_folds(raw_folds, len(train))
 
-    metric_name = str(_extract(baseline_result, "metric_name", default="roc_auc"))
-    oof_score = _coerce_float(_extract(baseline_result, "oof_score", default=None))
-    oof = _build_oof_from_result(baseline_result, train, id_column, target, folds)
-    submission = _build_submission_from_result(baseline_result, test, id_column, target)
-    fold_metrics = _normalize_fold_metrics(baseline_result, metric_name, oof_score)
+        baseline_result = _call_with_supported_kwargs(
+            run_logistic_oof_baseline,
+            train=train,
+            test=test,
+            target=target,
+            id_column=id_column,
+            folds=raw_folds,
+            fold=folds,
+            n_splits=n_splits,
+            seed=seed,
+        )
 
-    gate = evaluate_artifact_safety(train=train, test=test, oof=oof, submission=submission)
+        metric_name = str(_extract(baseline_result, "metric_name", default="roc_auc"))
+        oof_score = _coerce_float(_extract(baseline_result, "oof_score", default=None))
+        oof = _build_oof_from_result(baseline_result, train, id_column, target, folds)
+        submission = _build_submission_from_result(baseline_result, test, id_column, target)
+        fold_metrics = _normalize_fold_metrics(baseline_result, metric_name, oof_score)
 
-    write_parquet(paths.oof_path, oof)
-    write_csv(paths.submission_path, submission)
-    write_json(
-        paths.metrics_path,
-        {
-            "metric_name": metric_name,
-            "oof_score": oof_score,
-            "status": gate.status,
-            "reason": gate.reason,
-        },
-    )
-    write_csv(paths.fold_metrics_path, fold_metrics)
+        gate = evaluate_artifact_safety(train=train, test=test, oof=oof, submission=submission)
+        ensure_new_artifact_layout(paths)
 
-    feature_manifest = build_feature_manifest(
-        train_columns=list(train.columns),
-        target=target,
-        id_column=id_column,
-        schema_audit=schema_audit,
-    )
-    model_manifest = build_model_manifest(
-        model_family="logistic_regression",
-        metric_name=metric_name,
-        seed=seed,
-        n_splits=n_splits,
-        baseline_result=baseline_result,
-    )
-    write_json(paths.feature_manifest_path, feature_manifest)
-    write_json(paths.model_manifest_path, model_manifest)
-    write_markdown(paths.submission_review_path, _submission_review(gate.status, gate.reason))
+        write_parquet(paths.oof_path, oof)
+        write_csv(paths.submission_path, submission)
+        write_json(
+            paths.metrics_path,
+            {
+                "metric_name": metric_name,
+                "oof_score": oof_score,
+                "status": gate.status,
+                "reason": gate.reason,
+            },
+        )
+        write_csv(paths.fold_metrics_path, fold_metrics)
 
-    artifact_file_paths = {
-        "oof_path": str(paths.oof_path),
-        "submission_path": str(paths.submission_path),
-        "metrics_path": str(paths.metrics_path),
-        "fold_metrics_path": str(paths.fold_metrics_path),
-        "feature_manifest_path": str(paths.feature_manifest_path),
-        "model_manifest_path": str(paths.model_manifest_path),
-    }
-    run_manifest = build_run_manifest(
-        competition=competition,
-        experiment_id=experiment_id,
-        data_dir=data_dir,
-        target=target,
-        id_column=id_column,
-        n_splits=n_splits,
-        seed=seed,
-        status=gate.status,
-        paths=artifact_file_paths,
-    )
-    write_json(paths.run_manifest_path, add_file_checksums(run_manifest, artifact_file_paths))
+        feature_manifest = build_feature_manifest(
+            train_columns=list(train.columns),
+            target=target,
+            id_column=id_column,
+            schema_audit=schema_audit,
+        )
+        model_manifest = build_model_manifest(
+            model_family="logistic_regression",
+            metric_name=metric_name,
+            seed=seed,
+            n_splits=n_splits,
+            baseline_result=baseline_result,
+        )
+        write_json(paths.feature_manifest_path, feature_manifest)
+        write_json(paths.model_manifest_path, model_manifest)
+        write_markdown(paths.submission_review_path, _submission_review(gate.status, gate.reason))
 
-    append_experiment_registry(
-        paths.registry_path,
-        {
-            "experiment_id": experiment_id,
-            "competition": competition,
-            "metric_name": metric_name,
-            "oof_score": oof_score,
-            "status": gate.status,
+        artifact_file_paths = {
             "oof_path": str(paths.oof_path),
-            "test_pred_path": str(paths.submission_path),
+            "submission_path": str(paths.submission_path),
+            "metrics_path": str(paths.metrics_path),
             "fold_metrics_path": str(paths.fold_metrics_path),
-            "model_family": "logistic_regression",
-            "seed": seed,
-            "run_mode": "smoke",
-            "reason": gate.reason,
-            "feature_manifest_hash": stable_hash(feature_manifest),
-        },
-    )
+            "feature_manifest_path": str(paths.feature_manifest_path),
+            "model_manifest_path": str(paths.model_manifest_path),
+        }
+        run_manifest = build_run_manifest(
+            competition=competition,
+            experiment_id=experiment_id,
+            data_dir=data_dir,
+            target=target,
+            id_column=id_column,
+            n_splits=n_splits,
+            seed=seed,
+            status=gate.status,
+            paths=artifact_file_paths,
+        )
+        write_json(paths.run_manifest_path, add_file_checksums(run_manifest, artifact_file_paths))
 
-    _ = context
-    return SmokeEvidenceResult(
-        status=gate.status,
-        oof_score=oof_score,
-        paths=paths,
-        metric_name=metric_name,
-        reason=gate.reason,
-    )
+        append_experiment_registry(
+            paths.registry_path,
+            {
+                "experiment_id": experiment_id,
+                "competition": competition,
+                "metric_name": metric_name,
+                "metric_mode": "max",
+                "oof_score": oof_score,
+                "status": gate.status,
+                "oof_path": str(paths.oof_path),
+                "test_pred_path": str(paths.submission_path),
+                "fold_metrics_path": str(paths.fold_metrics_path),
+                "model_family": "logistic_regression",
+                "seed": seed,
+                "run_mode": "smoke",
+                "reason": gate.reason,
+                "feature_manifest_hash": stable_hash(feature_manifest),
+            },
+        )
+
+        _ = context
+        return SmokeEvidenceResult(
+            status=gate.status,
+            oof_score=oof_score,
+            paths=paths,
+            metric_name=metric_name,
+            reason=gate.reason,
+        )
+    except FileExistsError:
+        raise
+    except Exception as exc:
+        record_failure(
+            artifact_root=artifact_root,
+            competition=competition,
+            experiment_id=experiment_id,
+            reason=str(exc),
+            run_mode="smoke",
+            metric_name="roc_auc",
+            model_family="logistic_regression",
+        )
+        raise
 
 
 def _call_with_supported_kwargs(function: Any, **kwargs: Any) -> Any:

@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from ktabforge.config.loader import load_yaml_file
+from ktabforge.config.safety import safe_path_segment
+from ktabforge.config.schema import bundled_schema_path, require_loaded_config_valid
 from ktabforge.utils.hashing import stable_hash
 
 
@@ -34,6 +36,7 @@ def load_experiment_config(config_path: str | Path) -> ExperimentConfig:
     payload = load_yaml_file(path)
     if not isinstance(payload, dict):
         raise TypeError("Experiment config must be a YAML mapping.")
+    require_loaded_config_valid(payload, bundled_schema_path("experiment.schema.json"))
 
     experiment = _mapping(payload, "experiment")
     data = _mapping(payload, "data")
@@ -43,8 +46,14 @@ def load_experiment_config(config_path: str | Path) -> ExperimentConfig:
 
     seed = int(experiment.get("seed", validation.get("seed", 42)))
     return ExperimentConfig(
-        experiment_id=_required_string(experiment, "experiment_id"),
-        competition=_required_string(experiment, "competition"),
+        experiment_id=safe_path_segment(
+            _required_string(experiment, "experiment_id"),
+            field="experiment_id",
+        ),
+        competition=safe_path_segment(
+            _required_string(experiment, "competition"),
+            field="competition",
+        ),
         data_dir=Path(_required_string(data, "data_dir")),
         artifact_root=Path(_required_string(data, "artifact_root")),
         target=_required_string(data, "target"),

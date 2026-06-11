@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from ktabforge.metrics.scoring import metric_higher_is_better
+
 
 def compare_experiments(
     artifact_root: str | Path,
@@ -33,7 +35,12 @@ def compare_experiments(
 
     if "oof_score" in frame.columns:
         frame = frame.assign(oof_score=pd.to_numeric(frame["oof_score"], errors="coerce"))
-        frame = frame.sort_values("oof_score", ascending=False, na_position="last")
+        ascending = False
+        if "metric_mode" in frame.columns and frame["metric_mode"].dropna().nunique() == 1:
+            ascending = frame["metric_mode"].dropna().iloc[0] == "min"
+        elif "metric_name" in frame.columns and frame["metric_name"].dropna().nunique() == 1:
+            ascending = not metric_higher_is_better(frame["metric_name"].dropna().iloc[0])
+        frame = frame.sort_values("oof_score", ascending=ascending, na_position="last")
 
     return frame.head(top_n).reset_index(drop=True)
 

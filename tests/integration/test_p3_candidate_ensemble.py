@@ -399,3 +399,19 @@ def test_cli_ensemble_writes_oof_submission_manifest_and_registry(tmp_path):
     assert ensemble_row["model_family"] == "ensemble"
     assert ensemble_row["model_preset"] == "simple_average"
     assert ensemble_row["parent_experiment_ids"] == "candidate-a,candidate-b"
+
+
+def test_ensemble_config_rejects_unsafe_experiment_id(tmp_path):
+    artifact_root = tmp_path / "artifacts"
+    _write_two_candidate_registry(artifact_root)
+    config_path = _write_ensemble_config(tmp_path / "ensemble.yaml", artifact_root=artifact_root)
+    payload = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    payload["ensemble"]["experiment_id"] = "../escape"
+    config_path.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
+
+    try:
+        run_ensemble_from_config(config_path)
+    except ValueError as exc:
+        assert "experiment_id" in str(exc)
+    else:
+        raise AssertionError("unsafe experiment id should be rejected")
